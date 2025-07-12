@@ -1,25 +1,26 @@
 // server.js
-// --- FINAL CORRECTED VERSION v2.7.0 ---
+// --- FINAL CORRECTED VERSION v2.8.0 ---
 
 const { addonBuilder, serveHTTP } = require('stremio-addon-sdk');
 const path = require('path');
 const fs = require('fs');
 const { getAICorrectedSubtitle, getSubtitleUrlsForStremio } = require('./lib/subtitleMatcher');
 
-console.log("Starting Stremio AI Subtitle Addon v2.7.0...");
+console.log("Starting Stremio AI Subtitle Addon v2.8.0...");
 
 const manifest = {
     "id": "com.stremio.ai.subtitle.corrector.tr.final",
-    "version": "2.7.0",
+    "version": "2.8.0",
     "name": "AI Subtitle Corrector (TR)",
     "description": "Provides AI-corrected Turkish subtitles with a full customization UI and hash-matching.",
     "resources": ["subtitles"],
     "types": ["movie", "series"],
     "idPrefixes": ["tt", "tmdb"],
     "catalogs": [],
+    // This tells Stremio that the addon has a configuration page.
+    // Stremio will look for the '/configure' path by default.
     "behaviorHints": {
-        // This tells Stremio that the addon has a configuration page.
-        "configurable": true 
+        "configurable": true
     }
 };
 
@@ -43,20 +44,29 @@ builder.defineSubtitlesHandler(async (args) => {
 
 const addonInterface = builder.getInterface();
 
-// Use serveHTTP with custom route handling
+// Use the official 'serveHTTP' function with a custom 'get' handler for our routes.
 serveHTTP(addonInterface, {
     port: process.env.PORT || 7000,
     
     // This 'get' function allows us to define custom routes.
     get: (req, res, next) => {
-        // Route for the configuration page
+        // Route for the configuration page.
+        // Stremio will automatically look for '/configure' when `configurable` is true.
         if (req.path === '/configure' || req.path === '/') {
-            res.setHeader('Content-Type', 'text/html');
-            fs.createReadStream(path.join(__dirname, 'configure.html')).pipe(res);
+            fs.readFile(path.join(__dirname, 'configure.html'), 'utf8', (err, data) => {
+                if (err) {
+                    console.error("Failed to read configure.html:", err);
+                    res.writeHead(500, { 'Content-Type': 'text/plain' });
+                    res.end("Internal Server Error - Could not load configuration page.");
+                } else {
+                    res.writeHead(200, { 'Content-Type': 'text/html' });
+                    res.end(data);
+                }
+            });
             return;
         }
 
-        // Route for serving the actual .srt subtitle files
+        // Route for serving the actual .srt subtitle files.
         const srtMatch = req.path.match(/^\/subtitles\/([^\/]+)\/([^\/]+?)\.srt$/);
         if (srtMatch) {
             const videoId = srtMatch[1];
@@ -66,28 +76,27 @@ serveHTTP(addonInterface, {
             getAICorrectedSubtitle(videoId, language)
                 .then(correctedContent => {
                     if (correctedContent) {
-                        res.setHeader('Content-Type', 'text/plain; charset=utf-8');
+                        res.writeHead(200, { 'Content-Type': 'text/plain; charset=utf-8' });
                         res.end(correctedContent);
                     } else {
                         console.error(`[Endpoint] Subtitle generation failed for ${videoId}`);
-                        res.statusCode = 404;
+                        res.writeHead(404, { 'Content-Type': 'text/plain' });
                         res.end('Subtitle could not be generated.');
                     }
                 })
                 .catch(err => {
                     console.error("[Endpoint] CRITICAL ERROR while getting AI subtitle:", err);
-                    res.statusCode = 500;
+                    res.writeHead(500, { 'Content-Type': 'text/plain' });
                     res.end('Internal server error.');
                 });
             return;
         }
 
         // If no custom route matches, pass the request to the SDK's default handler.
-        // This is crucial for serving the /manifest.json file.
+        // This is crucial for serving the /manifest.json file and the subtitle list.
         next();
     }
 }).then(({ url }) => {
     console.log(`Addon running at: ${url}`);
-    // The manifest will now correctly point Stremio to the /configure path.
     console.log(`Configuration page available at: ${url}/configure`);
 });
