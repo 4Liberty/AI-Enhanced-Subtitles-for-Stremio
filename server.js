@@ -32,17 +32,8 @@ const manifest = {
     }
 };
 
+
 const builder = new addonBuilder(manifest);
-builder.defineStreamHandler(async ({ type, id, config: userConfig }) => {
-    try {
-        console.log(`Stream request for ${type} ${id}`);
-        const streams = await getEnrichedStreams(type, id, userConfig);
-        return { streams };
-    } catch (error) {
-        console.error("Error in stream handler:", error);
-        return { streams: [] };
-    }
-});
 
 // --- SUBTITLES HANDLER ---
 const { getSubtitleUrlsForStremio } = require('./lib/subtitleMatcher');
