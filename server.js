@@ -54,9 +54,9 @@ app.get('/configure', (req, res) => {
 
 
 const addonInterface = builder.getInterface();
-// Serve the Stremio addon manifest and stream endpoints only
-app.get('/manifest.json', serveHTTP(addonInterface));
-app.get('/stream/:type/:id', serveHTTP(addonInterface));
+
+// Correctly serve the Stremio addon interface for all relevant routes
+app.use('/', serveHTTP(addonInterface));
 
 
 // --- AI-CORRECTED SUBTITLE ENDPOINT ---
