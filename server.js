@@ -1,117 +1,71 @@
 // server.js
-// The main server for the self-configuring stream enricher addon.
-
-
-
-// --- UNIFIED SERVER FOR HEROKU COMPATIBILITY ---
-// Serves both Stremio SDK endpoints and custom endpoints on the same port ($PORT)
+// --- FINAL, SIMPLIFIED VERSION ---
 
 const path = require('path');
-const { addonBuilder } = require('stremio-addon-sdk');
-const config = require('./config');
-const { getEnrichedStreams } = require('./lib/streamEnricher');
-const { getAICorrectedSubtitle } = require('./lib/subtitleMatcher');
+const { addonBuilder, serveHTTP } = require('stremio-addon-sdk');
+const { getSubtitleUrlsForStremio, getAICorrectedSubtitle } = require('./lib/subtitleMatcher');
 const express = require('express');
 const app = express();
 
-console.log("Starting Stremio Stream Enricher Addon (Heroku-compatible mode)...");
+console.log("Starting Final Version of AI Subtitle Corrector Addon...");
 
-// --- ADDON MANIFEST ---
 const manifest = {
-    "id": "com.stremio.stream.enricher.addon",
-    "version": "1.0.1", // It's good practice to increment the version
-    "name": "AI Subtitle Corrector", // A more descriptive name
+    "id": "com.stremio.ai.subtitle.corrector.tr.v2", // A new ID to bust cache
+    "version": "1.2.0",
+    "name": "AI Subtitle Corrector (TR)",
     "description": "Provides AI-corrected Turkish subtitles.",
-    "resources": ["subtitles"], // CORRECTED: Only provide subtitles
-    "types": ["movie", "series"], // CORRECTED: These are the types of content you support
+    "resources": ["subtitles"],
+    "types": ["movie", "series"],
     "catalogs": [],
-    "idPrefixes": ["tt", "tmdb"], // IMPORTANT: Declare that you handle both IMDb and TMDb IDs
+    "idPrefixes": ["tt", "tmdb"],
     "behaviorHints": {
-        "configurable": true,
+        "configurable": false, // Simplified for now
         "configurationRequired": false
     }
 };
 
-
 const builder = new addonBuilder(manifest);
 
-// --- SUBTITLES HANDLER ---
-const { getSubtitleUrlsForStremio } = require('./lib/subtitleMatcher');
-builder.defineSubtitlesHandler(async ({ type, id }) => {
-    // Only Turkish subtitles are supported
-    const subtitles = await getSubtitleUrlsForStremio(id, ['tr']);
-    // Stremio expects: [{ id, lang, url, behaviorHints }]
-    return { subtitles };
+// The only handler that should be called by Stremio now
+builder.defineSubtitlesHandler(async (args) => {
+    console.log(`[Handler] Subtitle request received for ID: ${args.id}`);
+    try {
+        const result = await getSubtitleUrlsForStremio(args.id);
+        console.log(`[Handler] Successfully generated ${result.subtitles.length} subtitle option(s).`);
+        return result;
+    } catch (error) {
+        console.error("[Handler] CRITICAL ERROR in subtitle handler:", error);
+        return { subtitles: [] };
+    }
 });
 
-// --- CORS HEADERS (required for Stremio) ---
+// --- SERVER SETUP ---
+const addonInterface = builder.getInterface();
 app.use((req, res, next) => {
     res.header('Access-Control-Allow-Origin', '*');
     next();
 });
-app.use(express.json());
+app.use(addonInterface);
 
-// --- ROOT ENDPOINT ---
-app.get('/', (req, res) => {
-    res.send('Stremio Subtitle Addon is running.<br>Try <a href="/manifest.json">/manifest.json</a> or <a href="/configure">/configure</a>.');
-});
-
-// --- CONFIGURATION PAGE ENDPOINT ---
-app.get(/^(.+)?\/configure$/, (req, res) => {
-    res.sendFile(path.join(__dirname, 'configure.html'));
-});
-
-// --- AI-CORRECTED SUBTITLE ENDPOINT ---
-app.get('/ai-corrected-subtitle/:infoHash/:lang', async (req, res) => {
-    const { infoHash, lang } = req.params;
+// This endpoint serves the corrected subtitle file
+app.get('/subtitles/:videoId/:language.srt', async (req, res) => {
+    console.log(`[Endpoint] AI Subtitle request hit. Video ID: ${req.params.videoId}`);
     try {
-        const corrected = await getAICorrectedSubtitle(infoHash, lang);
-        if (!corrected) return res.status(404).send('Subtitle not found or correction failed.');
-        res.setHeader('Content-Type', 'text/plain; charset=utf-8');
-        res.send(corrected);
+        const corrected = await getAICorrectedSubtitle(req.params.videoId, req.params.language);
+        if (corrected) {
+            res.setHeader('Content-Type', 'text/plain; charset=utf-8');
+            res.send(corrected);
+        } else {
+            console.error('[Endpoint] Failed to generate corrected subtitle.');
+            res.status(404).send('Could not generate corrected subtitle.');
+        }
     } catch (e) {
+        console.error("[Endpoint] CRITICAL ERROR in AI endpoint:", e);
         res.status(500).send('Internal server error.');
-    }
-});
-
-// --- SERVE THE ADDON ---
-const addonInterface = builder.getInterface();
-
-// Always serve /manifest.json and /stream/:type/:id at the root, regardless of SDK router
-if (addonInterface.getRouter) {
-    app.use('/', addonInterface.getRouter());
-}
-
-
-// Fallback: always provide /manifest.json and /stream/:type/:id at the root AND with config prefix
-
-// Match /manifest.json and any config-prefixed /.../manifest.json (multi-segment)
-app.get(/\/.*manifest\.json$/, (req, res) => {
-    res.setHeader('Content-Type', 'application/json');
-    if (addonInterface.requestHandler) {
-        addonInterface.requestHandler(req, res);
-    } else {
-        res.json(manifest);
-    }
-});
-
-
-// Match /stream/:type/:id and /subtitles/:type/:id and any config-prefixed /.../stream/:type/:id or /.../subtitles/:type/:id (multi-segment)
-// Match /stream/:type/:id and /subtitles/:type/:id and any config-prefixed /.../stream/:type/:id or /.../subtitles/:type/:id (multi-segment)
-// The regex is updated to handle optional extra parameters like /filename=...
-app.get(/\/.*(stream|subtitles)\/([^/]+)\/([^/]+?)(?:\/([^/]+))?\.json$/, (req, res, next) => {
-    if (addonInterface.requestHandler) {
-        addonInterface.requestHandler(req, res);
-    } else {
-        if (req.path.includes('/stream/')) res.status(200).json({ streams: [] });
-        else if (req.path.includes('/subtitles/')) res.status(200).json({ subtitles: [] });
-        else res.status(404).end();
     }
 });
 
 const port = process.env.PORT || 7000;
 app.listen(port, () => {
-    console.log(`Stream Enricher Addon is running on port ${port}.`);
-    console.log(`Manifest: https://<your-heroku-app>.herokuapp.com/manifest.json`);
-    console.log(`Config UI: https://<your-heroku-app>.herokuapp.com/configure`);
+    console.log(`Addon is running on port ${port}.`);
 });
