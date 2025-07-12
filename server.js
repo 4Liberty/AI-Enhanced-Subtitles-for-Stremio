@@ -84,8 +84,9 @@ if (addonInterface.getRouter) {
 
 
 // Fallback: always provide /manifest.json and /stream/:type/:id at the root AND with config prefix
-const manifestRoute = /^\/([\w-]+)?\/?manifest\.json$/;
-app.get(manifestRoute, (req, res) => {
+
+// Match /manifest.json and any config-prefixed /.../manifest.json (multi-segment)
+app.get(/\/.*manifest\.json$/, (req, res) => {
     res.setHeader('Content-Type', 'application/json');
     if (addonInterface.requestHandler) {
         addonInterface.requestHandler(req, res);
@@ -94,8 +95,8 @@ app.get(manifestRoute, (req, res) => {
     }
 });
 
-const streamRoute = /^\/([\w-]+)?\/?stream\/([^/]+)\/([^/]+)$/;
-app.get(streamRoute, (req, res) => {
+// Match /stream/:type/:id and any config-prefixed /.../stream/:type/:id (multi-segment)
+app.get(/\/.*stream\/[^/]+\/[^/]+$/, (req, res) => {
     if (addonInterface.requestHandler) {
         addonInterface.requestHandler(req, res);
     } else {
@@ -106,8 +107,6 @@ app.get(streamRoute, (req, res) => {
 const port = process.env.PORT || 7000;
 app.listen(port, () => {
     console.log(`Stream Enricher Addon is running on port ${port}.`);
-    if (config.SERVER_URL) {
-        console.log(`Installation URL: ${config.SERVER_URL.replace(/:\d+$/, ':' + port)}/manifest.json`);
-        console.log(`Configuration Page: ${config.SERVER_URL.replace(/:\d+$/, ':' + port)}/configure`);
-    }
+    console.log(`Manifest: https://<your-heroku-app>.herokuapp.com/manifest.json`);
+    console.log(`Config UI: https://<your-heroku-app>.herokuapp.com/configure`);
 });
