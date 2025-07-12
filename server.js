@@ -69,11 +69,18 @@ app.get('/configure', (req, res) => {
 // --- SERVE THE ADDON ---
 const addonInterface = builder.getInterface();
 // Serve manifest and stream endpoints at any path depth (to support config-prefixed URLs)
+// Always serve manifest.json, even if addonInterface.requestHandler is missing
 app.get(/^(.+)?\/manifest.json$/, (req, res) => {
     res.setHeader('Content-Type', 'application/json');
-    addonInterface(req, res);
+    if (addonInterface && typeof addonInterface.requestHandler === 'function') {
+        addonInterface.requestHandler(req, res);
+    } else if (typeof manifest === 'object') {
+        res.status(200).json(manifest);
+    } else {
+        res.status(500).json({ error: 'Manifest not available' });
+    }
 });
-app.get(/^(.+)?\/stream\/([^/]+)\/([^/]+)$/, (req, res) => addonInterface(req, res));
+app.get(/^(.+)?\/stream\/([^/]+)\/([^/]+)$/, (req, res) => addonInterface.requestHandler(req, res));
 
 
 // --- AI-CORRECTED SUBTITLE ENDPOINT ---
