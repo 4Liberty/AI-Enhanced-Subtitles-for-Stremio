@@ -107,11 +107,12 @@ app.get(/\/.*manifest\.json$/, (req, res) => {
 
 
 // Match /stream/:type/:id and /subtitles/:type/:id and any config-prefixed /.../stream/:type/:id or /.../subtitles/:type/:id (multi-segment)
-app.get(/\/.*(stream|subtitles)\/[^/]+\/[^/]+\.json$/, (req, res) => {
+// Match /stream/:type/:id and /subtitles/:type/:id and any config-prefixed /.../stream/:type/:id or /.../subtitles/:type/:id (multi-segment)
+// The regex is updated to handle optional extra parameters like /filename=...
+app.get(/\/.*(stream|subtitles)\/([^/]+)\/([^/]+?)(?:\/([^/]+))?\.json$/, (req, res, next) => {
     if (addonInterface.requestHandler) {
         addonInterface.requestHandler(req, res);
     } else {
-        // Should never happen, but fallback to empty
         if (req.path.includes('/stream/')) res.status(200).json({ streams: [] });
         else if (req.path.includes('/subtitles/')) res.status(200).json({ subtitles: [] });
         else res.status(404).end();
