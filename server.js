@@ -1,14 +1,18 @@
 // server.js
 // The main server for the self-configuring stream enricher addon.
 
-const express = require('express');
+
+// --- SPLIT SERVER SETUP ---
+// 1. Stremio endpoints (manifest, stream, etc.) via SDK's serveHTTP
+// 2. Custom endpoints (configure UI, AI, etc.) via Express
+
 const path = require('path');
 const { addonBuilder, serveHTTP } = require('stremio-addon-sdk');
 const config = require('./config');
 const { getEnrichedStreams } = require('./lib/streamEnricher');
 const { getAICorrectedSubtitle } = require('./lib/subtitleMatcher');
 
-console.log("Starting Stremio Stream Enricher Addon...");
+console.log("Starting Stremio Stream Enricher Addon (split-server mode)...");
 
 // --- ADDON MANIFEST ---
 const manifest = {
@@ -26,14 +30,11 @@ const manifest = {
     }
 };
 
+// --- 1. Stremio Addon Server ---
 const builder = new addonBuilder(manifest);
-
-// --- STREAM HANDLER ---
-// This is the core function. It gets streams and then enriches them.
 builder.defineStreamHandler(async ({ type, id, config: userConfig }) => {
     try {
         console.log(`Stream request for ${type} ${id}`);
-        // The user's language configuration is passed to the enricher function.
         const streams = await getEnrichedStreams(type, id, userConfig);
         return { streams };
     } catch (error) {
@@ -42,38 +43,30 @@ builder.defineStreamHandler(async ({ type, id, config: userConfig }) => {
     }
 });
 
+const stremioPort = process.env.STREMIO_PORT || 7000;
+serveHTTP(builder.getInterface(), { port: stremioPort });
+console.log(`Stremio Addon endpoints listening on port ${stremioPort}`);
 
+// --- 2. Custom Express Server ---
+const express = require('express');
 const app = express();
-
-// --- CORS HEADERS (required for Stremio) ---
 app.use((req, res, next) => {
     res.header('Access-Control-Allow-Origin', '*');
     next();
 });
+app.use(express.json());
 
-
-// --- ROOT ENDPOINT ---
-// Shows a friendly message at the root
+// --- ROOT ENDPOINT (for custom server) ---
 app.get('/', (req, res) => {
-    res.send('Stremio Subtitle Addon is running.<br>Try <a href="/manifest.json">/manifest.json</a> or <a href="/configure">/configure</a>.');
+    res.send('Stremio Subtitle Addon (custom endpoints) is running.<br>Try <a href="/configure">/configure</a>.');
 });
 
 // --- CONFIGURATION PAGE ENDPOINT ---
-// Serves the HTML page when the user clicks "Configure" (supports config-prefixed URLs)
 app.get(/^(.+)?\/configure$/, (req, res) => {
     res.sendFile(path.join(__dirname, 'configure.html'));
 });
 
-
-
-// --- SERVE THE ADDON ---
-const addonInterface = builder.getInterface();
-// Use the Stremio Addon SDK router for all addon endpoints (manifest, stream, etc.)
-app.use('/', addonInterface.getRouter());
-
-
 // --- AI-CORRECTED SUBTITLE ENDPOINT ---
-// Usage: /ai-corrected-subtitle/:infoHash/:lang
 app.get('/ai-corrected-subtitle/:infoHash/:lang', async (req, res) => {
     const { infoHash, lang } = req.params;
     try {
@@ -86,8 +79,10 @@ app.get('/ai-corrected-subtitle/:infoHash/:lang', async (req, res) => {
     }
 });
 
-app.listen(config.PORT, () => {
-    console.log(`Stream Enricher Addon is running.`);
-    console.log(`Installation URL: ${config.SERVER_URL}/manifest.json`);
-    console.log(`Configuration Page: ${config.SERVER_URL}/configure`);
+const customPort = process.env.CUSTOM_PORT || 7001;
+app.listen(customPort, () => {
+    console.log(`Custom endpoints (UI, AI) listening on port ${customPort}`);
+    if (config.SERVER_URL) {
+        console.log(`Configuration Page: ${config.SERVER_URL.replace(/:\d+$/, ':' + customPort)}/configure`);
+    }
 });
