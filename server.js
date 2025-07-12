@@ -1,26 +1,22 @@
 // server.js
-// --- FINAL CORRECTED VERSION v1.4.0 ---
+// --- FINAL CORRECTED VERSION v1.5.0 ---
 
-const path = require('path');
-const express = require('express');
 const { addonBuilder, serveHTTP } = require('stremio-addon-sdk');
 const { getAICorrectedSubtitle, getSubtitleUrlsForStremio } = require('./lib/subtitleMatcher');
 
-console.log("Starting Final Corrected Version of AI Subtitle Addon...");
-
-const app = express();
+console.log("Starting Final Corrected Addon Server...");
 
 // --- MANIFEST ---
 // This defines what your addon does.
 const manifest = {
-    "id": "com.stremio.ai.subtitle.corrector.tr.final", // A new ID to guarantee no caching issues
-    "version": "1.4.0",
+    "id": "com.stremio.ai.subtitle.corrector.tr.final.v2", // New ID to guarantee no caching issues
+    "version": "1.5.0",
     "name": "AI Subtitle Corrector (TR)",
     "description": "Provides AI-corrected Turkish subtitles.",
-    "resources": ["subtitles"], // We ONLY provide subtitles
+    "resources": ["subtitles"],
     "types": ["movie", "series"],
     "catalogs": [],
-    "idPrefixes": ["tt", "tmdb"], // We can handle both IMDb and TMDb IDs
+    "idPrefixes": ["tt", "tmdb"],
     "behaviorHints": {
         "configurable": false,
         "configurationRequired": false
@@ -30,7 +26,7 @@ const manifest = {
 const builder = new addonBuilder(manifest);
 
 // --- HANDLERS ---
-// This handler is called by Stremio when it needs subtitles.
+// This is the only handler that Stremio will call.
 builder.defineSubtitlesHandler(async (args) => {
     console.log(`[Handler] Subtitle request received for ID: ${args.id}`);
     try {
@@ -43,42 +39,38 @@ builder.defineSubtitlesHandler(async (args) => {
     }
 });
 
-// --- SERVER SETUP ---
-// This is the correct way to integrate the addon with an Express server.
-const addonInterface = builder.getInterface();
-
-// This endpoint serves the corrected subtitle file itself.
-app.get('/subtitles/:videoId/:language.srt', async (req, res) => {
-    console.log(`[Endpoint] AI Subtitle request hit. Video ID: ${req.params.videoId}`);
-    try {
-        const corrected = await getAICorrectedSubtitle(req.params.videoId, req.params.language);
-        if (corrected) {
-            res.setHeader('Content-Type', 'text/plain; charset=utf-8');
-            res.send(corrected);
-        } else {
-            console.error('[Endpoint] Failed to generate corrected subtitle.');
-            res.status(404).send('Could not generate corrected subtitle.');
-        }
-    } catch (e) {
-        console.error("[Endpoint] CRITICAL ERROR in AI endpoint:", e);
-        res.status(500).send('Internal server error.');
-    }
-});
-
-// This serves the manifest.json and responds to Stremio's requests.
-// It must be the last middleware used.
-app.use((req, res, next) => {
-    serveHTTP(addonInterface, {
-        req,
-        res,
-        next
-    });
-});
-
-
-// --- START THE SERVER ---
+// --- SERVER START ---
+// This is the standard way to run a Stremio addon server.
 const port = process.env.PORT || 7000;
-app.listen(port, () => {
-    console.log(`Addon is running on port ${port}.`);
-    console.log(`To install, use the manifest URL: /manifest.json`);
+
+serveHTTP(builder.getInterface(), {
+    port: port,
+    // We add a custom endpoint for our AI subtitle files.
+    get: (req, res, next) => {
+        if (req.path.startsWith('/subtitles/')) {
+            const parts = req.path.split('/');
+            const videoId = parts[2];
+            const language = parts[3].replace('.srt', '');
+
+            console.log(`[Endpoint] AI Subtitle request hit. Video ID: ${videoId}`);
+            getAICorrectedSubtitle(videoId, language).then(corrected => {
+                if (corrected) {
+                    res.setHeader('Content-Type', 'text/plain; charset=utf-8');
+                    res.end(corrected);
+                } else {
+                    res.statusCode = 404;
+                    res.end('Could not generate corrected subtitle.');
+                }
+            }).catch(err => {
+                console.error("[Endpoint] CRITICAL ERROR in AI endpoint:", err);
+                res.statusCode = 500;
+                res.end('Internal server error.');
+            });
+        } else {
+            // Let the SDK handle other requests (like /manifest.json)
+            next();
+        }
+    }
+}).then(({ url }) => {
+    console.log(`Addon is running at: ${url}`);
 });
