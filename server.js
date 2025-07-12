@@ -1,24 +1,22 @@
 // server.js
-// --- FINAL CORRECTED VERSION v2.8.0 ---
+// --- FINAL STABLE VERSION v2.9.0 ---
 
+const express = require('express');
 const { addonBuilder, serveHTTP } = require('stremio-addon-sdk');
 const path = require('path');
-const fs = require('fs');
 const { getAICorrectedSubtitle, getSubtitleUrlsForStremio } = require('./lib/subtitleMatcher');
 
-console.log("Starting Stremio AI Subtitle Addon v2.8.0...");
+console.log("Starting Stremio AI Subtitle Addon v2.9.0...");
 
 const manifest = {
     "id": "com.stremio.ai.subtitle.corrector.tr.final",
-    "version": "2.8.0",
+    "version": "2.9.0",
     "name": "AI Subtitle Corrector (TR)",
     "description": "Provides AI-corrected Turkish subtitles with a full customization UI and hash-matching.",
     "resources": ["subtitles"],
     "types": ["movie", "series"],
     "idPrefixes": ["tt", "tmdb"],
     "catalogs": [],
-    // This tells Stremio that the addon has a configuration page.
-    // Stremio will look for the '/configure' path by default.
     "behaviorHints": {
         "configurable": true
     }
@@ -43,60 +41,48 @@ builder.defineSubtitlesHandler(async (args) => {
 });
 
 const addonInterface = builder.getInterface();
+const app = express();
+const port = process.env.PORT || 7000;
 
-// Use the official 'serveHTTP' function with a custom 'get' handler for our routes.
-serveHTTP(addonInterface, {
-    port: process.env.PORT || 7000,
-    
-    // This 'get' function allows us to define custom routes.
-    get: (req, res, next) => {
-        // Route for the configuration page.
-        // Stremio will automatically look for '/configure' when `configurable` is true.
-        if (req.path === '/configure' || req.path === '/') {
-            fs.readFile(path.join(__dirname, 'configure.html'), 'utf8', (err, data) => {
-                if (err) {
-                    console.error("Failed to read configure.html:", err);
-                    res.writeHead(500, { 'Content-Type': 'text/plain' });
-                    res.end("Internal Server Error - Could not load configuration page.");
-                } else {
-                    res.writeHead(200, { 'Content-Type': 'text/html' });
-                    res.end(data);
-                }
-            });
-            return;
-        }
+// Create the Stremio addon request handler.
+const addonHandler = serveHTTP(addonInterface);
 
-        // Route for serving the actual .srt subtitle files.
-        const srtMatch = req.path.match(/^\/subtitles\/([^\/]+)\/([^\/]+?)\.srt$/);
-        if (srtMatch) {
-            const videoId = srtMatch[1];
-            const language = srtMatch[2];
-            console.log(`[Endpoint] AI Subtitle file request hit. Video ID: ${videoId}, Lang: ${language}`);
+// Route for the configuration page.
+const configureRoute = (req, res) => {
+    res.sendFile(path.join(__dirname, 'configure.html'));
+};
+app.get('/', configureRoute);
+app.get('/configure', configureRoute);
 
-            getAICorrectedSubtitle(videoId, language)
-                .then(correctedContent => {
-                    if (correctedContent) {
-                        res.writeHead(200, { 'Content-Type': 'text/plain; charset=utf-8' });
-                        res.end(correctedContent);
-                    } else {
-                        console.error(`[Endpoint] Subtitle generation failed for ${videoId}`);
-                        res.writeHead(404, { 'Content-Type': 'text/plain' });
-                        res.end('Subtitle could not be generated.');
-                    }
-                })
-                .catch(err => {
-                    console.error("[Endpoint] CRITICAL ERROR while getting AI subtitle:", err);
-                    res.writeHead(500, { 'Content-Type': 'text/plain' });
-                    res.end('Internal server error.');
-                });
-            return;
-        }
+// Route for serving the actual .srt files.
+app.get('/subtitles/:videoId/:language.srt', (req, res) => {
+    const { videoId, language } = req.params;
+    console.log(`[Endpoint] AI Subtitle file request hit. Video ID: ${videoId}, Lang: ${language}`);
 
-        // If no custom route matches, pass the request to the SDK's default handler.
-        // This is crucial for serving the /manifest.json file and the subtitle list.
-        next();
-    }
-}).then(({ url }) => {
-    console.log(`Addon running at: ${url}`);
-    console.log(`Configuration page available at: ${url}/configure`);
+    getAICorrectedSubtitle(videoId, language)
+        .then(correctedContent => {
+            if (correctedContent) {
+                res.setHeader('Content-Type', 'text/plain; charset=utf-8');
+                res.send(correctedContent);
+            } else {
+                console.error(`[Endpoint] Subtitle generation failed for ${videoId}`);
+                res.status(404).send('Subtitle could not be generated.');
+            }
+        })
+        .catch(err => {
+            console.error("[Endpoint] CRITICAL ERROR while getting AI subtitle:", err);
+            res.status(500).send('Internal server error.');
+        });
+});
+
+// All other requests are handled by the Stremio addon SDK.
+// This will handle /manifest.json and the subtitle list requests.
+app.use((req, res, next) => {
+    // Pass the request to the Stremio addon handler.
+    addonHandler(req, res, next);
+});
+
+app.listen(port, () => {
+    console.log(`Addon running at: http://127.0.0.1:${port}`);
+    console.log(`Configuration page available at the root URL or by clicking 'Configure' in Stremio.`);
 });
