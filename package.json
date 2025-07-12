@@ -1,7 +1,7 @@
 {
   "name": "stremio-enricher-addon",
   "version": "1.0.0",
-  "description": "A proxy addon that enriches stream lists with perfect subtitle match information.",
+  "description": "A Stremio subtitle addon for Turkish subtitles with OpenSubtitles, Podnapisi, subdl.com, and AI sync correction.",
   "main": "server.js",
   "scripts": {
     "start": "node server.js"
@@ -16,7 +16,9 @@
   "license": "ISC",
   "dependencies": {
     "express": "^4.19.2",
-    "node-fetch": "^2.7.0",
     "stremio-addon-sdk": "^1.6.10"
+  },
+  "engines": {
+    "node": ">=18.0.0"
   }
 }

@@ -10,9 +10,15 @@ const config = {
     // Replace this with your actual VPS URL when you deploy.
     SERVER_URL: "http://your-vps-ip-or-domain:7000",
 
-    // Your API key from OpenSubtitles.com
+    // Your API key from OpenSubtitles.com (REQUIRED)
     // Register for a free account at https://www.opensubtitles.com
-    OPENSUBTITLES_API_KEY: process.env.OPENSUBTITLES_API_KEY || "YOUR_OPENSUBTITLES_API_KEY",
+    // Set OPENSUBTITLES_API_KEY as an environment variable for production use.
+    OPENSUBTITLES_API_KEY: process.env.OPENSUBTITLES_API_KEY,
+
+
+    // TMDb API key (for TMDb-to-IMDb conversion)
+    // Register at https://www.themoviedb.org/settings/api and set TMDB_API_KEY as an environment variable.
+    TMDB_API_KEY: process.env.TMDB_API_KEY,
 
     // Podnapisi unofficial JSON API endpoint (no API key required)
     // See: https://www.podnapisi.net/subtitles/search/advanced?keywords=YourMovie&year=2025

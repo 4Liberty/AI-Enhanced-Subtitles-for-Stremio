@@ -1,45 +1,56 @@
-# VLSub for OpenSubtitles.com
 
-A modern VLC extension for downloading subtitles from **OpenSubtitles.com** using their latest REST API.
 
-[![License: GPL v3](https://img.shields.io/badge/License-GPLv3-blue.svg)](https://www.gnu.org/licenses/gpl-3.0)
-[![GitHub release](https://img.shields.io/github/release/opensubtitles/vlsub-opensubtitles-com.svg)](https://github.com/opensubtitles/vlsub-opensubtitles-com/releases)
-[![GitHub downloads](https://img.shields.io/github/downloads/opensubtitles/vlsub-opensubtitles-com/total.svg)](https://github.com/opensubtitles/vlsub-opensubtitles-com/releases)
+# Stremio OpenSubtitles.com Subtitle Addon
 
-> **Note**: This extension is specifically for **OpenSubtitles.com** (not .org) and uses their modern REST API with enhanced features and better performance.
+This project provides a Stremio subtitle addon that delivers Turkish subtitles from OpenSubtitles.com, Podnapisi, and subdl.com, with AI-powered sync correction, robust fallback logic, and modern quality indicators.
 
-## ✨ Features
+## 🚀 Features
 
-- 🔍 **Smart Search**: Hash-based search for exact matches + name-based search with GuessIt integration
-- 🌐 **Multi-language Support**: Select up to 3 preferred subtitle languages with intelligent prioritization
-- 🎯 **Auto-detection**: Automatic locale detection from system settings, timezone, and IP geolocation
+- 🔍 **Smart Search**: Hash-based search for exact matches, name-based search with GuessIt integration, and robust fallback logic
 - 📱 **Modern API**: Uses OpenSubtitles.com REST API v1 for better performance and reliability
-- 🔄 **Auto-updates**: Built-in update mechanism keeps the extension current
-- 🎬 **Smart Metadata**: GuessIt API integration for accurate movie/TV show detection
-- 🏆 **Quality Indicators**: Shows trusted uploaders, download counts, sync quality, and ratings
-- 💾 **Flexible Download**: Auto-load subtitles or save manually with language codes
-- 🌍 **Country-specific Languages**: Intelligent language suggestions based on your location
+- 🔄 **Auto-updates**: Always up-to-date with the latest subtitle sources and improvements
+- 🎬 **Smart Metadata**: GuessIt API integration for accurate movie/TV show detection and metadata extraction
+- 🏆 **Quality Indicators**: Shows trusted uploaders, download counts, sync quality (🎯 Perfect Match), and ratings
+- 💾 **Flexible Download**: Auto-load subtitles or save manually with language codes, direct download for Stremio desktop/mobile
+- 🤖 **AI Sync Correction**: Gemini AI-powered subtitle sync correction for perfect timing
+- 🌐 **Multi-source Fallback**: Podnapisi and subdl.com fallback for maximum coverage
+- 🇹🇷 **Turkish-only Filtering**: Only Turkish subtitles are provided for best user experience
+- 🔗 **Easy Install**: Simple configuration UI and Stremio install link generation
 
 ## 🆚 Differences from Legacy vlsub (.org version)
 
-| Feature | Legacy vlsub (.org) | VLSub OpenSubtitles.com |
-|---------|---------------------|-------------------------|
-| **API** | XML-RPC (legacy) | REST API v1 (modern) |
-| **Authentication** | Optional | Required (free account) |
-| **Language Selection** | Single language | Up to 3 languages with priority |
-| **Search Methods** | Basic hash/name | Hash + Name + GuessIt fallback |
-| **Auto-updates** | None | Built-in update system |
-| **Locale Detection** | Simple | Advanced system detection |
-| **Quality Indicators** | Basic | Detailed (trusted, HD, sync, etc.) |
-| **Performance** | Slower XML parsing | Fast JSON API |
-| **Metadata** | Manual input | Smart GuessIt extraction |
+| Feature                | Legacy vlsub (.org) | VLSub OpenSubtitles.com (Stremio Addon) |
+|------------------------|---------------------|-----------------------------------------|
+| **API**                | XML-RPC (legacy)    | REST API v1 (modern)                    |
+| **Authentication**     | Optional            | Required (free account)                 |
+| **Language Selection** | Single language     | Up to 3 languages with priority         |
+| **Search Methods**     | Basic hash/name     | Hash + Name + GuessIt fallback          |
+| **Auto-updates**       | None                | Built-in update system                  |
+| **Locale Detection**   | Simple              | Advanced system detection               |
+| **Quality Indicators** | Basic               | Detailed (trusted, HD, sync, etc.)      |
+| **Performance**        | Slower XML parsing  | Fast JSON API                           |
+| **Metadata**           | Manual input        | Smart GuessIt extraction                |
 
-## 🚀 Installation
+## Installation (Stremio)
 
-### Method 1: One-line Installation (Recommended)
+1. Open the [configuration page](configure.html) to select your language and generate an install link.
+2. Click the install link or copy it into Stremio's "Add addon by URL" field.
+3. Subtitles will appear automatically in the player if available.
 
-**macOS/Linux:**
-```bash
+## Usage
+
+- Subtitles are provided automatically for Turkish content in Stremio.
+- Direct download is supported for desktop and mobile apps.
+- 🎯 **Perfect Match** subtitles are hash-matched and guaranteed to be in sync.
+
+## Support
+
+- [OpenSubtitles.com](https://www.opensubtitles.com/)
+- [GitHub Issues](https://github.com/opensubtitles/vlsub-opensubtitles-com/issues)
+
+## License
+
+This project is licensed under the MIT License.
 curl -sSL https://raw.githubusercontent.com/opensubtitles/vlsub-opensubtitles-com/main/scripts/install.sh | bash
 ```
 

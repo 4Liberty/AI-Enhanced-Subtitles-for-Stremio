@@ -12,11 +12,6 @@ Before creating a bug report, please:
 3. **Gather system information** (OS, VLC version, extension version)
 
 When creating a bug report, include:
-- **Clear title** describing the issue
-- **Steps to reproduce** the problem
-- **Expected vs actual behavior**
-- **Screenshots/logs** if applicable
-- **System information**:
   - Operating System and version
   - VLC Media Player version
   - Extension version
@@ -57,16 +52,9 @@ Use our [Feature Request Template](.github/ISSUE_TEMPLATE/feature_request.md).
 #### Development Guidelines
 
 ##### Code Style
-- **Indentation**: 2 spaces (no tabs)
-- **Line length**: Maximum 120 characters
-- **Comments**: Use `--` for single-line, `--[[]]--` for multi-line
-- **Functions**: Use descriptive names with camelCase
-- **Variables**: Use descriptive names with snake_case for locals
-- **Constants**: Use UPPER_CASE
 
 ##### Example:
 ```lua
--- Good
 local function searchSubtitlesByHash()
   local movie_hash = openSub.file.hash
   local byte_size = openSub.file.bytesize
@@ -79,19 +67,13 @@ local function searchSubtitlesByHash()
   -- API call logic here
 end
 
--- Constants
 local MAX_RETRY_ATTEMPTS = 3
 local DEFAULT_TIMEOUT = 30
 ```
 
 ##### Error Handling
-- Always validate inputs
-- Provide meaningful error messages
-- Use VLC's logging system: `vlc.msg.dbg()`, `vlc.msg.err()`
-- Handle network failures gracefully
 
 ```lua
--- Good error handling
 local function downloadSubtitle(url)
   if not url or url == "" then
     vlc.msg.err("[VLSub] Invalid download URL")
@@ -121,14 +103,6 @@ end
 #### Testing
 
 ##### Manual Testing Checklist
-- [ ] Extension loads without errors in VLC
-- [ ] Configuration window opens and saves settings
-- [ ] Hash search works with local video files
-- [ ] Name search works with various filename formats
-- [ ] Download and auto-load functionality works
-- [ ] Multi-language selection functions correctly
-- [ ] Auto-update mechanism works (if applicable)
-- [ ] Cross-platform compatibility (test on multiple OS if possible)
 
 ##### Test Cases
 1. **Fresh installation** - no existing config
@@ -156,21 +130,10 @@ end
 Brief description of changes
 
 ## Type of Change
-- [ ] Bug fix (non-breaking change)
-- [ ] New feature (non-breaking change)
-- [ ] Breaking change (fix or feature causing existing functionality to change)
-- [ ] Documentation update
 
 ## Testing
-- [ ] Manual testing completed
-- [ ] Cross-platform testing (specify platforms)
-- [ ] No syntax errors
 
 ## Checklist
-- [ ] Code follows project style guidelines
-- [ ] Self-review completed
-- [ ] Documentation updated
-- [ ] CHANGELOG.md updated
 ```
 
 ## 🏗️ Project Structure
@@ -200,51 +163,24 @@ vlsub-opensubtitles-com/
 ## 📚 Key Components
 
 ### Core Functions
-- `activate()` - Extension initialization
-- `searchHash()` - Hash-based subtitle search
-- `searchIMBD_v2()` - Name-based search
-- `download_subtitles_v2()` - Download and load subtitles
-- `openSub.checkLoginAndUserInfo()` - Authentication
 
 ### API Integration
-- `openSub.loginWithRestAPI()` - REST API authentication
-- `openSub.searchSubtitlesNewAPI()` - Modern search API
-- `openSub.downloadFromNewAPI()` - Download API
 
 ### User Interface
-- `interface_main()` - Main search interface
-- `interface_config()` - Configuration dialog
-- `interface_help()` - Help documentation
 
 ## 🔍 Code Review Criteria
 
 ### Functionality
-- Does the code work as intended?
-- Are edge cases handled properly?
-- Is error handling comprehensive?
 
 ### Code Quality
-- Is the code readable and well-documented?
-- Does it follow project conventions?
-- Are there any code smells or anti-patterns?
 
 ### Performance
-- Are there any performance bottlenecks?
-- Is memory usage optimized?
-- Are network requests efficient?
 
 ### Security
-- Is user input properly validated?
-- Are API keys and credentials handled securely?
-- Are there any potential vulnerabilities?
 
 ## 🌍 Internationalization
 
 Currently, the extension supports interface translation for:
-- English (default)
-- Czech, Danish, Dutch, Finnish, French
-- Greek, Basque, Portuguese, Romanian
-- Slovak, Spanish, Swedish, Ukrainian, Hungarian, Serbian
 
 To add a new language:
 1. Add language code to `translations_avail` in the script
@@ -254,16 +190,8 @@ To add a new language:
 ## 📝 Documentation
 
 ### Code Documentation
-- Use clear, descriptive comments
-- Document complex algorithms
-- Explain API integrations
-- Include usage examples
 
 ### User Documentation
-- Keep README.md updated
-- Update installation instructions
-- Document new features
-- Maintain troubleshooting guide
 
 ## 🚀 Release Process
 
@@ -275,21 +203,14 @@ To add a new language:
 
 ## 📞 Getting Help
 
-- **GitHub Discussions**: For general questions and ideas
-- **GitHub Issues**: For bugs and feature requests
-- **Code Review**: Tag maintainers for complex changes
 
 ## 🏆 Recognition
 
 Contributors will be recognized in:
-- README.md acknowledgments section
-- Release notes for significant contributions
-- GitHub contributors list
 
 ## 📄 License
 
 By contributing, you agree that your contributions will be licensed under the GNU General Public License v3.0.
 
----
 
 Thank you for contributing to VLSub OpenSubtitles.com! 🎉

@@ -1,42 +1,47 @@
-# Installation Guide
 
-This guide provides detailed installation instructions for VLSub OpenSubtitles.com extension.
+# Stremio Subtitle Addon Installation Guide
+
+This guide explains how to install and use the Stremio OpenSubtitles.com subtitle addon for Turkish subtitles.
 
 ## Quick Installation
 
-### One-Line Install (Recommended)
+1. Open the [configuration page](../configure.html) in your browser.
+2. Select your preferred language (Turkish is default).
+3. Click the generated install link, or copy it to Stremio's "Add addon by URL" field.
+4. Subtitles will appear automatically in Stremio for supported content.
 
-**macOS/Linux:**
-```bash
-curl -sSL https://raw.githubusercontent.com/opensubtitles/vlsub-opensubtitles-com/main/scripts/install.sh | bash
-```
+## Requirements
 
-**Windows (PowerShell as Administrator):**
-```powershell
-iwr -useb https://raw.githubusercontent.com/opensubtitles/vlsub-opensubtitles-com/main/scripts/install.ps1 | iex
-```
+- Stremio desktop or mobile app (latest version recommended)
+- Internet connection
 
-## Manual Installation
+## Advanced: Self-Hosting
 
-### Step 1: Download the Extension
+If you want to run your own instance:
 
-1. Go to the [Releases page](https://github.com/opensubtitles/vlsub-opensubtitles-com/releases)
-2. Download the latest `vlsubcom.lua` file
+1. Clone this repository:
+   ```bash
+   git clone https://github.com/opensubtitles/vlsub-opensubtitles-com.git
+   cd vlsub-opensubtitles-com
+   ```
+2. Install dependencies:
+   ```bash
+   npm install
+   ```
+3. Set your OpenSubtitles API key as an environment variable:
+   ```bash
+   export OPENSUBTITLES_API_KEY=your_api_key_here
+   ```
+4. Start the server:
+   ```bash
+   npm start
+   ```
+5. Open the local configuration page (e.g., http://localhost:7000/configure.html) to generate your Stremio install link.
 
-### Step 2: Locate VLC Extensions Directory
+## Support
 
-The VLC extensions directory location depends on your operating system:
-
-#### Windows
-```
-%APPDATA%\vlc\lua\extensions\
-```
-Full path example: `C:\Users\YourName\AppData\Roaming\vlc\lua\extensions\`
-
-To open this directory:
-1. Press `Win + R`
-2. Type `%APPDATA%\vlc\lua\extensions\`
-3. Press Enter
+- [GitHub Issues](https://github.com/opensubtitles/vlsub-opensubtitles-com/issues)
+- [OpenSubtitles.com](https://www.opensubtitles.com/)
 
 #### macOS
 ```

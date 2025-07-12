@@ -1,43 +1,39 @@
-name: Release VLSub OpenSubtitles.com
+# ===============================
+# VLSub OpenSubtitles.com Features (for reference)
+#
+# - 🔍 Smart Search: Hash-based search for exact matches + name-based search with GuessIt integration
+# - 📱 Modern API: Uses OpenSubtitles.com REST API v1 for better performance and reliability
+# - 🔄 Auto-updates: Built-in update mechanism keeps the extension current
+# - 🎬 Smart Metadata: GuessIt API integration for accurate movie/TV show detection
+# - 🏆 Quality Indicators: Shows trusted uploaders, download counts, sync quality, and ratings
+# - 💾 Flexible Download: Auto-load subtitles or save manually with language codes
+#
+# ## 🆚 Differences from Legacy vlsub (.org version)
+#
+# | Feature                | Legacy vlsub (.org) | VLSub OpenSubtitles.com |
+# |------------------------|---------------------|-------------------------|
+# | **API**                | XML-RPC (legacy)    | REST API v1 (modern)    |
+# | **Authentication**     | Optional            | Required (free account) |
+# | **Language Selection** | Single language     | Up to 3 languages       |
+# | **Search Methods**     | Basic hash/name     | Hash + Name + GuessIt   |
+# | **Auto-updates**       | None                | Built-in update system  |
+# | **Locale Detection**   | Simple              | Advanced system detect  |
+# | **Quality Indicators** | Basic               | Detailed (trusted, HD, sync, etc.) |
+# | **Performance**        | Slower XML parsing  | Fast JSON API           |
+# | **Metadata**           | Manual input        | Smart GuessIt extraction|
+# ===============================
+name: (DISABLED) Release workflow for VLC extension (no longer used)
 
 on:
-  push:
-    tags:
-      - 'v*'
-    branches:
-      - main
   workflow_dispatch:
     inputs:
       version:
         description: 'Version to release (e.g., v1.0.1)'
-        required: true
+        required: false
         type: string
 
-env:
-  SCRIPT_NAME: vlsubcom.lua
-
-jobs:
-  release:
-    runs-on: ubuntu-latest
-    permissions:
-      contents: write
-
-    # Only run on tag pushes or manual dispatch, not on regular main branch pushes
-    if: startsWith(github.ref, 'refs/tags/') || github.event_name == 'workflow_dispatch'
-
-    steps:
-    - name: Checkout code
-      uses: actions/checkout@v4
-      with:
-        token: ${{ secrets.GITHUB_TOKEN }}
-        fetch-depth: 0
-
-    - name: Set version from tag or input
-      id: version
-      run: |
-        if [ "${{ github.event_name }}" = "workflow_dispatch" ]; then
-          VERSION="${{ github.event.inputs.version }}"
-        else
+# This workflow is now disabled. The Stremio addon does not require packaging or release via GitHub Actions.
+# See README.md for Stremio addon deployment and installation instructions.
           VERSION=${GITHUB_REF#refs/tags/}
         fi
         echo "VERSION=$VERSION" >> $GITHUB_OUTPUT
