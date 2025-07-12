@@ -19,14 +19,13 @@ console.log("Starting Stremio Stream Enricher Addon (Heroku-compatible mode)..."
 // --- ADDON MANIFEST ---
 const manifest = {
     "id": "com.stremio.stream.enricher.addon",
-    "version": "1.0.0",
-    "name": "Subtitle Match Enricher",
-    "description": "Enhances your stream list by showing which torrents have perfect subtitle matches in your preferred languages.",
-    "resources": ["stream", "subtitles"],
-    "types": ["movie", "series", "subtitles"],
+    "version": "1.0.1", // It's good practice to increment the version
+    "name": "AI Subtitle Corrector", // A more descriptive name
+    "description": "Provides AI-corrected Turkish subtitles.",
+    "resources": ["subtitles"], // CORRECTED: Only provide subtitles
+    "types": ["movie", "series"], // CORRECTED: These are the types of content you support
     "catalogs": [],
-    "idPrefixes": ["tt"],
-    "subtitleLanguages": ["tr"],
+    "idPrefixes": ["tt", "tmdb"], // IMPORTANT: Declare that you handle both IMDb and TMDb IDs
     "behaviorHints": {
         "configurable": true,
         "configurationRequired": false
