@@ -1,65 +1,80 @@
 // server.js
-// --- FINAL CORRECTED VERSION v1.7.0 ---
+// --- FINAL STABLE VERSION v2.0.0 ---
 
 const { addonBuilder, serveHTTP } = require('stremio-addon-sdk');
 const { getAICorrectedSubtitle, getSubtitleUrlsForStremio } = require('./lib/subtitleMatcher');
 
-console.log("Starting Final Addon Server v1.7.0...");
+console.log("Starting Stremio AI Subtitle Addon v2.0.0...");
 
+// --- 1. MANIFEST ---
+// Defines the addon's capabilities for Stremio.
 const manifest = {
-    "id": "com.stremio.ai.subtitle.corrector.tr.v3", // Final new ID
-    "version": "1.7.0",
+    "id": "com.stremio.ai.subtitle.corrector.tr.final.v4", // A new ID to guarantee a fresh install
+    "version": "2.0.0",
     "name": "AI Subtitle Corrector (TR)",
     "description": "Provides AI-corrected Turkish subtitles.",
-    "resources": ["subtitles"],
+    "resources": ["subtitles"], // We ONLY provide subtitles
     "types": ["movie", "series"],
     "catalogs": [],
-    "idPrefixes": ["tt", "tmdb"]
+    "idPrefixes": ["tt", "tmdb"] // We can handle both IMDb and TMDb IDs
 };
 
 const builder = new addonBuilder(manifest);
 
+// --- 2. SUBTITLE HANDLER ---
+// This is the only handler Stremio will call for your addon.
 builder.defineSubtitlesHandler(async (args) => {
-    console.log(`[Handler] Subtitle request for ID: ${args.id}`);
+    console.log(`[Handler] Subtitle request received for ID: ${args.id}`);
     try {
         const result = await getSubtitleUrlsForStremio(args.id);
+        if (result && result.subtitles && result.subtitles.length > 0) {
+            console.log(`[Handler] Successfully generated ${result.subtitles.length} subtitle option(s).`);
+        } else {
+            console.warn(`[Handler] No subtitle options were generated for ${args.id}.`);
+        }
         return result;
     } catch (error) {
-        console.error("[Handler] Error in subtitle handler:", error);
-        return { subtitles: [] };
+        console.error("[Handler] CRITICAL ERROR in subtitle handler:", error);
+        return { subtitles: [] }; // Always return a valid object
     }
 });
 
-const addonInterface = builder.getInterface();
+// --- 3. SERVER LOGIC ---
+// This is the standard, Heroku-compatible way to run a Stremio addon.
+const port = process.env.PORT || 7000;
 
-// This is the correct way to start the server and handle custom routes.
-serveHTTP(addonInterface, {
-    port: process.env.PORT || 7000,
-    // Define a custom route for our AI subtitle files.
+serveHTTP(builder.getInterface(), {
+    port: port,
+    // We add a custom endpoint to serve our dynamically generated .srt files.
     get: (req, res, next) => {
-        const match = req.path.match(/^\/subtitles\/([^\/]+)\/([^\/]+?)\.srt$/);
+        // This regex will match requests like "/subtitles/tt12345/tr.srt"
+        const match = req.path.match(/^\/subtitles\/(.*)\/(.*)\.srt$/);
         if (match) {
             const videoId = match[1];
             const language = match[2];
-            console.log(`[Endpoint] AI Subtitle request hit. Video ID: ${videoId}`);
-            getAICorrectedSubtitle(videoId, language).then(corrected => {
-                if (corrected) {
-                    res.setHeader('Content-Type', 'text/plain; charset=utf-8');
-                    res.end(corrected);
-                } else {
-                    res.statusCode = 404;
-                    res.end('Subtitle could not be generated.');
-                }
-            }).catch(err => {
-                console.error("[Endpoint] CRITICAL ERROR:", err);
-                res.statusCode = 500;
-                res.end('Internal server error.');
-            });
+
+            console.log(`[Endpoint] Request to serve corrected subtitle for ID: ${videoId}`);
+            
+            getAICorrectedSubtitle(videoId, language)
+                .then(correctedContent => {
+                    if (correctedContent) {
+                        res.setHeader('Content-Type', 'text/plain; charset=utf-8');
+                        res.end(correctedContent);
+                    } else {
+                        res.statusCode = 404;
+                        res.end('Could not generate corrected subtitle.');
+                    }
+                })
+                .catch(err => {
+                    console.error("[Endpoint] CRITICAL ERROR:", err);
+                    res.statusCode = 500;
+                    res.end('Internal server error.');
+                });
         } else {
-            // Let the SDK handle other requests (like /manifest.json)
+            // If the URL doesn't match our custom endpoint, let the SDK handle it.
             next();
         }
     }
 }).then(({ url }) => {
-    console.log(`Addon is running at: ${url}`);
+    console.log(`Addon is running and accessible at: ${url}`);
 });
