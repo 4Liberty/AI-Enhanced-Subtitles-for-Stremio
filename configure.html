@@ -45,10 +45,26 @@
         ];
 
         const grid = document.getElementById('languageGrid');
+
+        // --- Parse config from URL if present ---
+        function getConfigFromUrl() {
+            const match = window.location.pathname.match(/^\/(.+)\/configure$/);
+            if (match && match[1]) {
+                try {
+                    const decoded = atob(match[1]);
+                    return JSON.parse(decoded);
+                } catch (e) { return null; }
+            }
+            return null;
+        }
+        const userConfig = getConfigFromUrl();
+        const selectedLangs = userConfig && Array.isArray(userConfig.languages) ? userConfig.languages : ['en'];
+
         languages.forEach(lang => {
             const label = document.createElement('label');
             label.className = 'lang-option';
-            label.innerHTML = `<input type="checkbox" name="language" value="${lang.code}" ${lang.code === 'en' ? 'checked' : ''}> ${lang.name}`;
+            const checked = selectedLangs.includes(lang.code) ? 'checked' : '';
+            label.innerHTML = `<input type="checkbox" name="language" value="${lang.code}" ${checked}> ${lang.name}`;
             grid.appendChild(label);
         });
 
