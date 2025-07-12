@@ -55,4 +55,20 @@ app.use((req, res, next) => {
 const port = process.env.PORT || 7000;
 app.listen(port, () => {
     console.log(`Addon is running at: http://127.0.0.1:${port}`);
+
+
+const port = process.env.PORT || 7000;
+const publicUrl = process.env.HEROKU_APP_NAME ? `https://${process.env.HEROKU_APP_NAME}.herokuapp.com` : `http://127.0.0.1:${port}`;
+
+serveHTTP(builder.getInterface(), {
+    port: port,
+    static: "/public", // A path for static files if you had any
+    get: (req, res, next) => {
+        // ... your existing get logic
+    }
+}).then(({ url }) => {
+    // The 'url' here will still be local, but the addon can use 'publicUrl' internally
+    console.log(`Addon is running. Publicly accessible at: ${publicUrl}/manifest.json`);
+    console.log(`Internal address: ${url}`);
+
 });
