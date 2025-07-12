@@ -1,0 +1,22 @@
+{
+  "name": "stremio-enricher-addon",
+  "version": "1.0.0",
+  "description": "A proxy addon that enriches stream lists with perfect subtitle match information.",
+  "main": "server.js",
+  "scripts": {
+    "start": "node server.js"
+  },
+  "keywords": [
+    "stremio",
+    "stremio-addon",
+    "subtitles",
+    "proxy"
+  ],
+  "author": "You",
+  "license": "ISC",
+  "dependencies": {
+    "express": "^4.19.2",
+    "node-fetch": "^2.7.0",
+    "stremio-addon-sdk": "^1.6.10"
+  }
+}
