@@ -82,7 +82,8 @@
             const installUrl = `${baseUrl}/${configStr}/manifest.json`;
 
             const installLinkElement = document.getElementById('install-link');
-            installLinkElement.href = `stremio://${installUrl}`;
+            installLinkElement.href = installUrl; // Use only the plain URL
+            installLinkElement.textContent = installUrl;
             document.getElementById('install-link-container').style.display = 'block';
 
             navigator.clipboard.writeText(installUrl).then(() => {
