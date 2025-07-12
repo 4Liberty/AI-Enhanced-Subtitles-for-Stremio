@@ -76,15 +76,28 @@ app.get('/ai-corrected-subtitle/:infoHash/:lang', async (req, res) => {
 
 // --- SERVE THE ADDON ---
 const addonInterface = builder.getInterface();
+
+// Always serve /manifest.json and /stream/:type/:id at the root, regardless of SDK router
 if (addonInterface.getRouter) {
     app.use('/', addonInterface.getRouter());
-} else if (addonInterface.requestHandler) {
-    app.get(/^(.+)?\/manifest.json$/, (req, res) => {
-        res.setHeader('Content-Type', 'application/json');
-        addonInterface.requestHandler(req, res);
-    });
-    app.get(/^(.+)?\/stream\/([^/]+)\/([^/]+)$/, (req, res) => addonInterface.requestHandler(req, res));
 }
+
+// Fallback: always provide /manifest.json and /stream/:type/:id at the root
+app.get('/manifest.json', (req, res) => {
+    res.setHeader('Content-Type', 'application/json');
+    if (addonInterface.requestHandler) {
+        addonInterface.requestHandler(req, res);
+    } else {
+        res.json(manifest);
+    }
+});
+app.get('/stream/:type/:id', (req, res) => {
+    if (addonInterface.requestHandler) {
+        addonInterface.requestHandler(req, res);
+    } else {
+        res.status(501).json({ streams: [] });
+    }
+});
 
 const port = process.env.PORT || 7000;
 app.listen(port, () => {
