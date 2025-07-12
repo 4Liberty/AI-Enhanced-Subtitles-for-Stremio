@@ -22,10 +22,11 @@ const manifest = {
     "version": "1.0.0",
     "name": "Subtitle Match Enricher",
     "description": "Enhances your stream list by showing which torrents have perfect subtitle matches in your preferred languages.",
-    "resources": ["stream"],
-    "types": ["movie", "series"],
+    "resources": ["stream", "subtitles"],
+    "types": ["movie", "series", "subtitles"],
     "catalogs": [],
     "idPrefixes": ["tt"],
+    "subtitleLanguages": ["tr"],
     "behaviorHints": {
         "configurable": true,
         "configurationRequired": false
