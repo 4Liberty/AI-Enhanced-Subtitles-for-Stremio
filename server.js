@@ -22,7 +22,7 @@ const manifest = {
     "idPrefixes": ["tt"],
     "behaviorHints": {
         "configurable": true,
-        "configurationRequired": true
+        "configurationRequired": false
     }
 };
 
@@ -59,8 +59,8 @@ app.get('/', (req, res) => {
 });
 
 // --- CONFIGURATION PAGE ENDPOINT ---
-// Serves the HTML page when the user clicks "Configure".
-app.get('/configure', (req, res) => {
+// Serves the HTML page when the user clicks "Configure" (supports config-prefixed URLs)
+app.get(/^(.+)?\/configure$/, (req, res) => {
     res.sendFile(path.join(__dirname, 'configure.html'));
 });
 
