@@ -22,13 +22,19 @@ const manifest = {
 const builder = new addonBuilder(manifest);
 
 builder.defineSubtitlesHandler(async (args) => {
-    console.log(`[Handler] Subtitle request for ID: ${args.id}`);
+    console.log('[Handler] Subtitle handler called with args:', JSON.stringify(args, null, 2)); // New log
+    console.log(`[Handler] Subtitle request received for ID: ${args.id}`);
     try {
         const result = await getSubtitleUrlsForStremio(args.id);
+        if (result && result.subtitles && result.subtitles.length > 0) {
+            console.log(`[Handler] Successfully generated ${result.subtitles.length} subtitle option(s).`);
+        } else {
+            console.warn(`[Handler] No subtitle options were generated for ${args.id}.`);
+        }
         return result;
     } catch (error) {
-        console.error("[Handler] Error in subtitle handler:", error);
-        return { subtitles: [] };
+        console.error("[Handler] CRITICAL ERROR in subtitle handler:", error);
+        return { subtitles: [] }; // Always return a valid object
     }
 });
 
