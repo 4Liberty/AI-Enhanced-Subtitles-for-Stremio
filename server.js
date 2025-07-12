@@ -1,18 +1,17 @@
 // server.js
-// --- FINAL CORRECTED VERSION v1.7.0 ---
+// --- FINAL STABLE VERSION v2.1.0 ---
 
-const express = require('express');
 const { addonBuilder, serveHTTP } = require('stremio-addon-sdk');
 const { getAICorrectedSubtitle, getSubtitleUrlsForStremio } = require('./lib/subtitleMatcher');
-const path = require('path');
 
-console.log("Starting Final Addon Server v1.7.0...");
+console.log("Starting Stremio AI Subtitle Addon v2.1.0...");
 
+// --- 1. MANIFEST ---
 const manifest = {
-    "id": "com.stremio.ai.subtitle.corrector.tr.v3", // Final new ID
-    "version": "1.7.0",
+    "id": "com.stremio.ai.subtitle.corrector.tr.final.v5", // Incremented ID for fresh install
+    "version": "2.1.0",
     "name": "AI Subtitle Corrector (TR)",
-    "description": "Provides AI-corrected Turkish subtitles.",
+    "description": "Provides AI-corrected Turkish subtitles from multiple sources with sync correction.",
     "resources": ["subtitles"],
     "types": ["movie", "series"],
     "catalogs": [],
@@ -21,9 +20,9 @@ const manifest = {
 
 const builder = new addonBuilder(manifest);
 
+// --- 2. SUBTITLE HANDLER ---
 builder.defineSubtitlesHandler(async (args) => {
-    console.log('[Handler] Subtitle handler called with args:', JSON.stringify(args, null, 2)); // New log
-    console.log(`[Handler] Subtitle request received for ID: ${args.id}`);
+    console.log(`[Handler] Subtitle request received for: ${args.id}`);
     try {
         const result = await getSubtitleUrlsForStremio(args.id);
         if (result && result.subtitles && result.subtitles.length > 0) {
@@ -31,51 +30,58 @@ builder.defineSubtitlesHandler(async (args) => {
         } else {
             console.warn(`[Handler] No subtitle options were generated for ${args.id}.`);
         }
-        return result;
+        return Promise.resolve(result); // Use Promise.resolve for clarity
     } catch (error) {
         console.error("[Handler] CRITICAL ERROR in subtitle handler:", error);
-        return { subtitles: [] }; // Always return a valid object
+        return Promise.resolve({ subtitles: [] }); // Always return a valid promise
     }
 });
 
-const addonInterface = builder.getInterface();
-const app = express();
-
-// Serve the configuration page at the root
-app.get('/', (req, res) => {
-    res.sendFile(path.join(__dirname, 'configure.html'));
-});
-
-// Stremio addon handler
-app.use((req, res, next) => {
-    // Check if the request is for the manifest
-    if (req.path.endsWith('/manifest.json')) {
-        // Let the SDK handle the manifest request
-        serveHTTP(addonInterface, { port: process.env.PORT || 7000 })(req, res);
-    } else {
-        // Let the SDK handle other requests
-        serveHTTP(addonInterface, { port: process.env.PORT || 7000 })(req, res);
-    }
-});
-
+// --- 3. SERVER LOGIC ---
 const port = process.env.PORT || 7000;
-app.listen(port, () => {
-    console.log(`Addon is running at: http://127.0.0.1:${port}`);
 
+// Use the Heroku-provided app name to construct the public URL, otherwise default to localhost
+const publicUrl = process.env.HEROKU_APP_NAME
+    ? `https://${process.env.HEROKU_APP_NAME}.herokuapp.com`
+    : `http://127.0.0.1:${port}`;
 
-const port = process.env.PORT || 7000;
-const publicUrl = process.env.HEROKU_APP_NAME ? `https://${process.env.HEROKU_APP_NAME}.herokuapp.com` : `http://127.0.0.1:${port}`;
-
-serveHTTP(builder.getInterface(), {
-    port: port,
-    static: "/public", // A path for static files if you had any
-    get: (req, res, next) => {
-        // ... your existing get logic
-    }
-}).then(({ url }) => {
-    // The 'url' here will still be local, but the addon can use 'publicUrl' internally
-    console.log(`Addon is running. Publicly accessible at: ${publicUrl}/manifest.json`);
-    console.log(`Internal address: ${url}`);
+serveHTTP(builder.getInterface(), { port: port })
+    .then(({ url }) => {
+        // This log now uses the correctly scoped 'url' from the promise and the 'publicUrl'
+        console.log(`Addon running at: ${url}`);
+        console.log(`Publicly accessible at: ${publicUrl}/manifest.json`);
+    })
+    .catch(err => {
+        console.error("Failed to start server:", err);
     });
 
+// --- Custom Endpoint for serving subtitles ---
+// This part seems to be missing from your server.js but is crucial for subtitles to work.
+// I've re-added it from your previous files.
+const express = require('express');
+const app = express();
+
+app.get('/subtitles/:videoId/:language.srt', (req, res) => {
+    const { videoId, language } = req.params;
+    console.log(`[Endpoint] Request to serve corrected subtitle for ID: ${videoId}`);
+    
+    getAICorrectedSubtitle(videoId, language)
+        .then(correctedContent => {
+            if (correctedContent) {
+                res.setHeader('Content-Type', 'text/plain; charset=utf-8');
+                res.send(correctedContent); // Use res.send for express
+            } else {
+                res.status(404).send('Could not generate corrected subtitle.');
+            }
+        })
+        .catch(err => {
+            console.error("[Endpoint] CRITICAL ERROR:", err);
+            res.status(500).send('Internal server error.');
+        });
+});
+
+// The SDK's serveHTTP handles the addon routes, but we need a listener for our custom srt endpoint.
+// This is a simplified way to combine them.
+const server = app.listen(port, () => {
+    console.log(`Express server for subtitles listening on port ${port}`);
 });
