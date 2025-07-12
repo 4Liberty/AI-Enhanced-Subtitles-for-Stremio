@@ -82,8 +82,10 @@ if (addonInterface.getRouter) {
     app.use('/', addonInterface.getRouter());
 }
 
-// Fallback: always provide /manifest.json and /stream/:type/:id at the root
-app.get('/manifest.json', (req, res) => {
+
+// Fallback: always provide /manifest.json and /stream/:type/:id at the root AND with config prefix
+const manifestRoute = /^\/([\w-]+)?\/?manifest\.json$/;
+app.get(manifestRoute, (req, res) => {
     res.setHeader('Content-Type', 'application/json');
     if (addonInterface.requestHandler) {
         addonInterface.requestHandler(req, res);
@@ -91,7 +93,9 @@ app.get('/manifest.json', (req, res) => {
         res.json(manifest);
     }
 });
-app.get('/stream/:type/:id', (req, res) => {
+
+const streamRoute = /^\/([\w-]+)?\/?stream\/([^/]+)\/([^/]+)$/;
+app.get(streamRoute, (req, res) => {
     if (addonInterface.requestHandler) {
         addonInterface.requestHandler(req, res);
     } else {
