@@ -44,6 +44,13 @@ builder.defineStreamHandler(async ({ type, id, config: userConfig }) => {
 
 const app = express();
 
+
+// --- ROOT ENDPOINT ---
+// Shows a friendly message at the root
+app.get('/', (req, res) => {
+    res.send('Stremio Subtitle Addon is running.<br>Try <a href="/manifest.json">/manifest.json</a> or <a href="/configure">/configure</a>.');
+});
+
 // --- CONFIGURATION PAGE ENDPOINT ---
 // Serves the HTML page when the user clicks "Configure".
 app.get('/configure', (req, res) => {
