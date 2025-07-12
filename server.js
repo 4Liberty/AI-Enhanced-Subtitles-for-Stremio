@@ -76,5 +76,6 @@ serveHTTP(builder.getInterface(), {
     // The 'url' here will still be local, but the addon can use 'publicUrl' internally
     console.log(`Addon is running. Publicly accessible at: ${publicUrl}/manifest.json`);
     console.log(`Internal address: ${url}`);
+    });
 
 });
