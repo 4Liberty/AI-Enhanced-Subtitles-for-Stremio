@@ -1,22 +1,22 @@
 // server.js
-// --- FINAL CORRECTED VERSION v2.4.0 ---
+// --- FINAL CORRECTED VERSION v2.5.0 ---
 
+const express = require('express');
 const { addonBuilder, serveHTTP } = require('stremio-addon-sdk');
 const path = require('path');
 const { getAICorrectedSubtitle, getSubtitleUrlsForStremio } = require('./lib/subtitleMatcher');
 
-console.log("Starting Stremio AI Subtitle Addon v2.4.0...");
+console.log("Starting Stremio AI Subtitle Addon v2.5.0...");
 
 const manifest = {
     "id": "com.stremio.ai.subtitle.corrector.tr.final",
-    "version": "2.4.0",
+    "version": "2.5.0",
     "name": "AI Subtitle Corrector (TR)",
     "description": "Provides AI-corrected Turkish subtitles with a full customization UI and hash-matching.",
     "resources": ["subtitles"],
     "types": ["movie", "series"],
     "idPrefixes": ["tt", "tmdb"],
-    "catalogs": [], // <-- THIS LINE FIXES THE CRASH
-    // Add a configuration link to the manifest
+    "catalogs": [],
     "behaviorHints": {
         "configurable": true
     }
@@ -24,11 +24,9 @@ const manifest = {
 
 const builder = new addonBuilder(manifest);
 
-// This handler provides the list of available subtitles to Stremio
 builder.defineSubtitlesHandler(async (args) => {
     console.log(`[Handler] Subtitle request received for: ${args.id}`);
     try {
-        // Pass the infoHash from the arguments if it exists
         const infoHash = args.extra && args.extra.video_hash ? args.extra.video_hash : null;
         const result = await getSubtitleUrlsForStremio(args.id, infoHash);
         
@@ -43,47 +41,37 @@ builder.defineSubtitlesHandler(async (args) => {
 });
 
 const addonInterface = builder.getInterface();
+const app = express();
 
-// Use serveHTTP with custom route handling for serving the actual subtitle files
-serveHTTP(addonInterface, {
-    port: process.env.PORT || 7000,
-    // Serve the 'configure.html' page from the root directory
-    static: [path.join(__dirname, '/')], 
-    
-    // Custom route to handle the delivery of AI-corrected .srt files
-    get: (req, res, next) => {
-        // This regex will match requests like /subtitles/tt12345/tr.srt
-        const match = req.path.match(/^\/subtitles\/([^\/]+)\/([^\/]+?)\.srt$/);
+app.get('/', (req, res) => {
+    res.sendFile(path.join(__dirname, 'configure.html'));
+});
 
-        if (match) {
-            const videoId = match[1];
-            const language = match[2];
-            console.log(`[Endpoint] AI Subtitle file request hit. Video ID: ${videoId}, Lang: ${language}`);
+app.get('/subtitles/:videoId/:language.srt', (req, res) => {
+    const { videoId, language } = req.params;
+    console.log(`[Endpoint] AI Subtitle file request hit. Video ID: ${videoId}, Lang: ${language}`);
 
-            getAICorrectedSubtitle(videoId, language)
-                .then(correctedContent => {
-                    if (correctedContent) {
-                        res.setHeader('Content-Type', 'text/plain; charset=utf-8');
-                        res.end(correctedContent);
-                    } else {
-                        console.error(`[Endpoint] Subtitle generation failed for ${videoId}`);
-                        res.statusCode = 404;
-                        res.end('Subtitle could not be generated.');
-                    }
-                })
-                .catch(err => {
-                    console.error("[Endpoint] CRITICAL ERROR while getting AI subtitle:", err);
-                    res.statusCode = 500;
-                    res.end('Internal server error.');
-                });
-        } else {
-            // If the path doesn't match, let the SDK handle it (for /manifest.json etc.)
-            next();
-        }
-    }
+    getAICorrectedSubtitle(videoId, language)
+        .then(correctedContent => {
+            if (correctedContent) {
+                res.setHeader('Content-Type', 'text/plain; charset=utf-8');
+                res.send(correctedContent);
+            } else {
+                console.error(`[Endpoint] Subtitle generation failed for ${videoId}`);
+                res.status(404).send('Subtitle could not be generated.');
+            }
+        })
+        .catch(err => {
+            console.error("[Endpoint] CRITICAL ERROR while getting AI subtitle:", err);
+            res.status(500).send('Internal server error.');
+        });
+});
 
-}).then(({ url }) => {
-    console.log(`Addon running at: ${url}`);
-    // The configuration page is now at the root URL
-    console.log(`Configuration page available at the root URL or by clicking 'Configure' in Stremio.`);
+app.use((req, res, next) => {
+    serveHTTP(addonInterface)(req, res);
+});
+
+const port = process.env.PORT || 7000;
+app.listen(port, () => {
+    console.log(`Addon running at: http://127.0.0.1:${port}`);
 });
