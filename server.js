@@ -1,37 +1,41 @@
 // server.js
-// --- FINAL, SIMPLIFIED VERSION ---
+// --- FINAL CORRECTED VERSION v1.4.0 ---
 
 const path = require('path');
-const { addonBuilder, serveHTTP } = require('stremio-addon-sdk');
-const { getSubtitleUrlsForStremio, getAICorrectedSubtitle } = require('./lib/subtitleMatcher');
 const express = require('express');
+const { addonBuilder, serveHTTP } = require('stremio-addon-sdk');
+const { getAICorrectedSubtitle, getSubtitleUrlsForStremio } = require('./lib/subtitleMatcher');
+
+console.log("Starting Final Corrected Version of AI Subtitle Addon...");
+
 const app = express();
 
-console.log("Starting Final Version of AI Subtitle Corrector Addon...");
-
+// --- MANIFEST ---
+// This defines what your addon does.
 const manifest = {
-    "id": "com.stremio.ai.subtitle.corrector.tr.v2", // A new ID to bust cache
-    "version": "1.2.0",
+    "id": "com.stremio.ai.subtitle.corrector.tr.final", // A new ID to guarantee no caching issues
+    "version": "1.4.0",
     "name": "AI Subtitle Corrector (TR)",
     "description": "Provides AI-corrected Turkish subtitles.",
-    "resources": ["subtitles"],
+    "resources": ["subtitles"], // We ONLY provide subtitles
     "types": ["movie", "series"],
     "catalogs": [],
-    "idPrefixes": ["tt", "tmdb"],
+    "idPrefixes": ["tt", "tmdb"], // We can handle both IMDb and TMDb IDs
     "behaviorHints": {
-        "configurable": false, // Simplified for now
+        "configurable": false,
         "configurationRequired": false
     }
 };
 
 const builder = new addonBuilder(manifest);
 
-// The only handler that should be called by Stremio now
+// --- HANDLERS ---
+// This handler is called by Stremio when it needs subtitles.
 builder.defineSubtitlesHandler(async (args) => {
     console.log(`[Handler] Subtitle request received for ID: ${args.id}`);
     try {
         const result = await getSubtitleUrlsForStremio(args.id);
-        console.log(`[Handler] Successfully generated ${result.subtitles.length} subtitle option(s).`);
+        console.log(`[Handler] Generated ${result.subtitles.length} subtitle option(s).`);
         return result;
     } catch (error) {
         console.error("[Handler] CRITICAL ERROR in subtitle handler:", error);
@@ -40,14 +44,10 @@ builder.defineSubtitlesHandler(async (args) => {
 });
 
 // --- SERVER SETUP ---
+// This is the correct way to integrate the addon with an Express server.
 const addonInterface = builder.getInterface();
-app.use((req, res, next) => {
-    res.header('Access-Control-Allow-Origin', '*');
-    next();
-});
-app.use(addonInterface);
 
-// This endpoint serves the corrected subtitle file
+// This endpoint serves the corrected subtitle file itself.
 app.get('/subtitles/:videoId/:language.srt', async (req, res) => {
     console.log(`[Endpoint] AI Subtitle request hit. Video ID: ${req.params.videoId}`);
     try {
@@ -65,7 +65,20 @@ app.get('/subtitles/:videoId/:language.srt', async (req, res) => {
     }
 });
 
+// This serves the manifest.json and responds to Stremio's requests.
+// It must be the last middleware used.
+app.use((req, res, next) => {
+    serveHTTP(addonInterface, {
+        req,
+        res,
+        next
+    });
+});
+
+
+// --- START THE SERVER ---
 const port = process.env.PORT || 7000;
 app.listen(port, () => {
     console.log(`Addon is running on port ${port}.`);
+    console.log(`To install, use the manifest URL: /manifest.json`);
 });
