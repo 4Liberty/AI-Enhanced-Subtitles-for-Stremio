@@ -50,13 +50,12 @@ app.get('/configure', (req, res) => {
     res.sendFile(path.join(__dirname, 'configure.html'));
 });
 
+
 // --- SERVE THE ADDON ---
-
-
 const addonInterface = builder.getInterface();
-
-// Correctly serve the Stremio addon interface for all relevant routes
-app.use('/', serveHTTP(addonInterface));
+// Serve Stremio manifest and stream endpoints using Express
+app.get('/manifest.json', (req, res) => addonInterface(req, res));
+app.get('/stream/:type/:id', (req, res) => addonInterface(req, res));
 
 
 // --- AI-CORRECTED SUBTITLE ENDPOINT ---
