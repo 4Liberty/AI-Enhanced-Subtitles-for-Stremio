@@ -105,12 +105,16 @@ app.get(/\/.*manifest\.json$/, (req, res) => {
     }
 });
 
-// Match /stream/:type/:id and any config-prefixed /.../stream/:type/:id (multi-segment)
-app.get(/\/.*stream\/[^/]+\/[^/]+$/, (req, res) => {
+
+// Match /stream/:type/:id and /subtitles/:type/:id and any config-prefixed /.../stream/:type/:id or /.../subtitles/:type/:id (multi-segment)
+app.get(/\/.*(stream|subtitles)\/[^/]+\/[^/]+\.json$/, (req, res) => {
     if (addonInterface.requestHandler) {
         addonInterface.requestHandler(req, res);
     } else {
-        res.status(501).json({ streams: [] });
+        // Should never happen, but fallback to empty
+        if (req.path.includes('/stream/')) res.status(200).json({ streams: [] });
+        else if (req.path.includes('/subtitles/')) res.status(200).json({ subtitles: [] });
+        else res.status(404).end();
     }
 });
 
