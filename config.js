@@ -23,8 +23,9 @@ const config = {
     // 24 * 60 * 60 * 1000 = 24 hours.
     CACHE_DURATION_MS: 24 * 60 * 60 * 1000,
 
-    // Subdl API endpoint (if available)
-    SUBDL_API_URL: process.env.SUBDL_API_URL || null, // If not set, fallback to HTML scrape
+
+    // Subdl API key (for https://api.subdl.com/api/v1/subtitles)
+    SUBDL_API_KEY: process.env.SUBDL_API_KEY || null, // If not set, fallback to HTML scrape
 
     // OpenSubtitles usage tracker
     opensubtitlesUsage: {
