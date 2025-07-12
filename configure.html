@@ -31,6 +31,10 @@
             <button onclick="generateInstallLink()">Generate & Copy Install Link</button>
         </div>
 
+        <div id="stremio-install-link-container" style="display:none; margin-top:1.5rem; text-align:center;">
+            <a href="#" id="stremio-install-link" style="background:#4ade80;color:#1a1a1a;padding:0.75rem 1.5rem;border-radius:8px;font-weight:bold;text-decoration:none;">Install in Stremio</a>
+        </div>
+
         <div id="install-link-container" style="display:none;">
             <a href="#" id="install-link">Click here to install in Stremio</a>
         </div>
@@ -81,13 +85,19 @@
             const configStr = btoa(JSON.stringify(config)); // Encode config as Base64
             const installUrl = `${baseUrl}/${configStr}/manifest.json`;
 
+            // Show plain URL for manual copy-paste
             const installLinkElement = document.getElementById('install-link');
-            installLinkElement.href = installUrl; // Use only the plain URL
+            installLinkElement.href = installUrl;
             installLinkElement.textContent = installUrl;
             document.getElementById('install-link-container').style.display = 'block';
 
+            // Show stremio:// install link for direct install
+            const stremioInstallLink = document.getElementById('stremio-install-link');
+            stremioInstallLink.href = `stremio://${installUrl.replace(/^https?:\/\//, '')}`;
+            document.getElementById('stremio-install-link-container').style.display = 'block';
+
             navigator.clipboard.writeText(installUrl).then(() => {
-                alert('Install link copied to clipboard! Paste it into the Stremio search bar if clicking does not work.');
+                alert('Install link copied to clipboard! You can also click "Install in Stremio" for direct install on desktop/mobile.');
             }).catch(err => {
                 console.error('Could not copy text: ', err);
                 alert('Could not copy link. Please manually copy the link shown below.');
