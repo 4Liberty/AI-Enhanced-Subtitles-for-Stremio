@@ -51,8 +51,12 @@ app.get('/configure', (req, res) => {
 });
 
 // --- SERVE THE ADDON ---
+
 const addonInterface = builder.getInterface();
-app.use(serveHTTP(addonInterface));
+// Serve the Stremio addon interface at the root
+app.use((req, res, next) => {
+    addonInterface(req, res, next);
+});
 
 
 // --- AI-CORRECTED SUBTITLE ENDPOINT ---
