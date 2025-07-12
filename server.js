@@ -42,7 +42,14 @@ builder.defineStreamHandler(async ({ type, id, config: userConfig }) => {
     }
 });
 
+
 const app = express();
+
+// --- CORS HEADERS (required for Stremio) ---
+app.use((req, res, next) => {
+    res.header('Access-Control-Allow-Origin', '*');
+    next();
+});
 
 
 // --- ROOT ENDPOINT ---
@@ -62,7 +69,10 @@ app.get('/configure', (req, res) => {
 // --- SERVE THE ADDON ---
 const addonInterface = builder.getInterface();
 // Serve manifest and stream endpoints at any path depth (to support config-prefixed URLs)
-app.get(/^(.+)?\/manifest.json$/, (req, res) => addonInterface(req, res));
+app.get(/^(.+)?\/manifest.json$/, (req, res) => {
+    res.setHeader('Content-Type', 'application/json');
+    addonInterface(req, res);
+});
 app.get(/^(.+)?\/stream\/([^/]+)\/([^/]+)$/, (req, res) => addonInterface(req, res));
 
 
