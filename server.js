@@ -1,20 +1,21 @@
 // server.js
-// --- FINAL CORRECTED VERSION v2.3.0 ---
+// --- FINAL CORRECTED VERSION v2.4.0 ---
 
 const { addonBuilder, serveHTTP } = require('stremio-addon-sdk');
 const path = require('path');
 const { getAICorrectedSubtitle, getSubtitleUrlsForStremio } = require('./lib/subtitleMatcher');
 
-console.log("Starting Stremio AI Subtitle Addon v2.3.0...");
+console.log("Starting Stremio AI Subtitle Addon v2.4.0...");
 
 const manifest = {
     "id": "com.stremio.ai.subtitle.corrector.tr.final",
-    "version": "2.3.0",
+    "version": "2.4.0",
     "name": "AI Subtitle Corrector (TR)",
     "description": "Provides AI-corrected Turkish subtitles with a full customization UI and hash-matching.",
     "resources": ["subtitles"],
     "types": ["movie", "series"],
     "idPrefixes": ["tt", "tmdb"],
+    "catalogs": [], // <-- THIS LINE FIXES THE CRASH
     // Add a configuration link to the manifest
     "behaviorHints": {
         "configurable": true
