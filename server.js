@@ -45,6 +45,15 @@ builder.defineStreamHandler(async ({ type, id, config: userConfig }) => {
     }
 });
 
+// --- SUBTITLES HANDLER ---
+const { getSubtitleUrlsForStremio } = require('./lib/subtitleMatcher');
+builder.defineSubtitlesHandler(async ({ type, id }) => {
+    // Only Turkish subtitles are supported
+    const subtitles = await getSubtitleUrlsForStremio(id, ['tr']);
+    // Stremio expects: [{ id, lang, url, behaviorHints }]
+    return { subtitles };
+});
+
 // --- CORS HEADERS (required for Stremio) ---
 app.use((req, res, next) => {
     res.header('Access-Control-Allow-Origin', '*');
