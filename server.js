@@ -1,4 +1,5 @@
 // --- ENVIRONMENT CHECKS ---
+
 const express = require('express');
 const { addonBuilder, serveHTTP } = require('stremio-addon-sdk');
 const path = require('path');
@@ -64,9 +65,16 @@ builder.defineStreamHandler(async (args) => {
     }
 });
 
+
 const addonInterface = builder.getInterface();
+
+// --- Stremio Addon SDK HTTP server (for Stremio endpoints only) ---
+serveHTTP(addonInterface, { port: process.env.PORT || 7000 });
+
+// --- Express server for custom endpoints (health, config, .srt, etc.) ---
 const app = express();
-const port = process.env.PORT || 7000;
+const mgmtPort = process.env.MGMT_PORT || 7001;
+
 
 checkEnvVars();
 
@@ -137,12 +145,7 @@ app.get('/manifest.json', (req, res) => {
     res.send(JSON.stringify(addonInterface.manifest));
 });
 
-// All other requests are handled by the Stremio addon SDK.
-const stremioMiddleware = serveHTTP(addonInterface);
-if (typeof stremioMiddleware !== 'function') {
-    throw new Error('serveHTTP(addonInterface) did not return a middleware function');
-}
-app.use('/', stremioMiddleware);
+
 
 // Global error handler for uncaught errors in async routes
 app.use((err, req, res, next) => {
@@ -152,7 +155,9 @@ app.use((err, req, res, next) => {
     }
 });
 
-app.listen(port, () => {
-    console.log(`Addon running at: http://127.0.0.1:${port}`);
-    console.log(`Configuration page available at the root URL or by clicking 'Configure' in Stremio.`);
+app.listen(mgmtPort, () => {
+    console.log(`Express management endpoints running at: http://127.0.0.1:${mgmtPort}`);
+    console.log(`Health check: http://127.0.0.1:${mgmtPort}/health`);
+    console.log(`Configuration page: http://127.0.0.1:${mgmtPort}/ or /configure`);
+    console.log(`Subtitle .srt endpoint: http://127.0.0.1:${mgmtPort}/subtitles/:videoId/:language.srt`);
 });
