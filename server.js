@@ -135,9 +135,9 @@ app.use((req, res, next) => {
     next();
 });
 
-// All other requests are handled by the Stremio addon SDK.
-// This will handle /manifest.json, /subtitles, and /stream requests.
-app.use(serveHTTP(addonInterface));
+
+// Attach Stremio SDK routes to the Express app
+require('stremio-addon-sdk').serveExpress(addonInterface, app);
 
 app.listen(port, () => {
     console.log(`Addon running at: http://127.0.0.1:${port}`);
