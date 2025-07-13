@@ -136,8 +136,9 @@ app.use((req, res, next) => {
 });
 
 
-// Attach Stremio SDK routes to the Express app
-require('stremio-addon-sdk').serveExpress(addonInterface, app);
+
+// Attach Stremio SDK routes to the Express app (compatible with all SDK versions)
+app.use(addonInterface.getMiddleware());
 
 app.listen(port, () => {
     console.log(`Addon running at: http://127.0.0.1:${port}`);
