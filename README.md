@@ -1,8 +1,6 @@
+# Stremio OpenSubtitles.com Subtitle Addon + Real-Debrid
 
-
-# Stremio OpenSubtitles.com Subtitle Addon
-
-This project provides a Stremio subtitle addon that delivers Turkish subtitles from OpenSubtitles.com, Podnapisi, and subdl.com, with AI-powered sync correction, robust fallback logic, and modern quality indicators.
+This project provides a Stremio subtitle addon that delivers Turkish subtitles from OpenSubtitles.com, Podnapisi, and subdl.com, with AI-powered sync correction, robust fallback logic, Real-Debrid cached stream integration, and modern quality indicators.
 
 ## 🚀 Features
 
@@ -16,6 +14,8 @@ This project provides a Stremio subtitle addon that delivers Turkish subtitles f
 - 🌐 **Multi-source Fallback**: Podnapisi and subdl.com fallback for maximum coverage
 - 🇹🇷 **Turkish-only Filtering**: Only Turkish subtitles are provided for best user experience
 - 🔗 **Easy Install**: Simple configuration UI and Stremio install link generation
+- 🎯 **Real-Debrid Integration**: Cached stream searching and instant availability for premium users
+- ⚡ **Priority Streaming**: Real-Debrid cached streams appear at the top of the list
 
 ## 🆚 Differences from Legacy vlsub (.org version)
 
@@ -37,11 +37,31 @@ This project provides a Stremio subtitle addon that delivers Turkish subtitles f
 2. Click the install link or copy it into Stremio's "Add addon by URL" field.
 3. Subtitles will appear automatically in the player if available.
 
+## Real-Debrid Configuration
+
+For premium users, this addon supports Real-Debrid integration for cached stream access:
+
+1. **Get your Real-Debrid API Key:**
+   - Visit [Real-Debrid API](https://real-debrid.com/api)
+   - Log in to your account
+   - Generate a new API key
+
+2. **Configure the addon:**
+   - Set the `REAL_DEBRID_API_KEY` environment variable
+   - Or use the Stremio configuration UI (if available)
+
+3. **Benefits:**
+   - Cached streams appear at the top of the list
+   - Perfect hash matches for subtitle synchronization
+   - Instant availability checking
+   - Premium quality streams (4K, 1080p, 720p)
+
 ## Usage
 
 - Subtitles are provided automatically for Turkish content in Stremio.
 - Direct download is supported for desktop and mobile apps.
 - 🎯 **Perfect Match** subtitles are hash-matched and guaranteed to be in sync.
+- Real-Debrid users get priority cached streams at the top of the list.
 
 ## Support
 
@@ -52,7 +72,6 @@ This project provides a Stremio subtitle addon that delivers Turkish subtitles f
 
 This project is licensed under the MIT License.
 curl -sSL https://raw.githubusercontent.com/opensubtitles/vlsub-opensubtitles-com/main/scripts/install.sh | bash
-```
 
 
 **Windows (PowerShell):**

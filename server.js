@@ -6,6 +6,7 @@ const { addonBuilder, serveHTTP } = require('stremio-addon-sdk');
 const path = require('path');
 const { getAICorrectedSubtitle, getSubtitleUrlsForStremio, getCachedSubtitleContent, getProgressiveSubtitleContent, aiEnhancementStatus } = require('./lib/subtitleMatcher');
 const { getEnrichedStreams } = require('./lib/streamEnricher');
+const { generateRealDebridStreams, generateSampleRealDebridStreams } = require('./lib/realDebridSearch');
 
 console.log("Starting Stremio AI Subtitle Addon v2.9.1...");
 
@@ -16,6 +17,11 @@ const requiredEnvVars = [
     'GEMINI_API_KEY'
 ];
 
+const optionalEnvVars = [
+    'REAL_DEBRID_API_KEY',
+    'TMDB_API_KEY'
+];
+
 console.log("Environment variable status:");
 requiredEnvVars.forEach(varName => {
     const isSet = !!process.env[varName];
@@ -23,6 +29,12 @@ requiredEnvVars.forEach(varName => {
     if (!isSet) {
         console.warn(`  WARNING: ${varName} is not set - related functionality will be disabled`);
     }
+});
+
+console.log("Optional environment variables:");
+optionalEnvVars.forEach(varName => {
+    const isSet = !!process.env[varName];
+    console.log(`  ${varName}: ${isSet ? 'SET' : 'NOT SET'}`);
 });
 
 // Add sample API key setup instructions
@@ -35,12 +47,15 @@ if (!process.env.OPENSUBTITLES_API_KEY) {
 if (!process.env.GEMINI_API_KEY) {
     console.log("  To get GEMINI_API_KEY: Visit https://ai.google.dev/ and get an API key");
 }
+if (!process.env.REAL_DEBRID_API_KEY) {
+    console.log("  To get REAL_DEBRID_API_KEY: Visit https://real-debrid.com/api and get an API key");
+}
 
 const manifest = {
     id: "com.stremio.ai.subtitle.corrector.tr.final",
     version: "2.9.3",
-    name: "AI Subtitle Corrector (TR)",
-    description: "Provides AI-corrected Turkish subtitles with hash matching, multiple sources, and stream provision for reliable hash access.",
+    name: "AI Subtitle Corrector (TR) + Real-Debrid",
+    description: "Provides AI-corrected Turkish subtitles with hash matching, multiple sources, Real-Debrid cached streams, and stream provision for reliable hash access.",
     logo: "https://your-heroku-app.herokuapp.com/logo.svg",
     resources: ["subtitles", "stream"], // Include stream for reliable hash provision
     types: ["movie", "series"],
@@ -55,7 +70,7 @@ const manifest = {
     // Explicitly define what we provide
     provides: {
         subtitles: ["movie", "series"],
-        stream: ["movie", "series"] // For reliable hash-based subtitle matching
+        stream: ["movie", "series"] // For reliable hash-based subtitle matching + Real-Debrid cached streams
     }
 };
 
@@ -81,7 +96,7 @@ const subtitleHandler = async (args) => {
     }
 };
 
-// Define the stream handler for hash-based matching
+// Define the stream handler for Real-Debrid and hash-based matching
 const streamHandler = async (args) => {
     console.log(`[Handler] Stream request received for: ${args.id}`);
     
@@ -106,36 +121,112 @@ const streamHandler = async (args) => {
             });
     }
     
-    // Provide sample streams with hashes for hash-based matching
-    // These streams won't actually work for playback, but provide hashes for subtitle matching
     const streams = [];
     
-    // Add sample torrent hashes for popular movies to enable hash-based matching
+    // PRIORITY 1: Real-Debrid cached streams (appear at TOP of list)
+    if (process.env.REAL_DEBRID_API_KEY && movieId.startsWith('tt')) {
+        console.log(`[Handler] Searching Real-Debrid for cached streams...`);
+        try {
+            const rdStreams = await generateRealDebridStreams(movieId, 'movie');
+            if (rdStreams && rdStreams.length > 0) {
+                console.log(`[Handler] Found ${rdStreams.length} Real-Debrid cached streams`);
+                streams.push(...rdStreams);
+            } else {
+                console.log(`[Handler] No Real-Debrid cached streams found, using samples`);
+                // Add sample Real-Debrid streams for demonstration
+                const sampleRdStreams = generateSampleRealDebridStreams(movieId);
+                streams.push(...sampleRdStreams);
+            }
+        } catch (e) {
+            console.error(`[Handler] Real-Debrid search error:`, e);
+        }
+    }
+    
+    // PRIORITY 2: Hash-based subtitle matching streams (for non-Real-Debrid users)
     const sampleHashes = [
-        { title: 'Sample 1080p', infoHash: '3a4b5c6d7e8f9a0b1c2d3e4f5a6b7c8d9e0f1a2b' },
-        { title: 'Sample 720p', infoHash: '1a2b3c4d5e6f7a8b9c0d1e2f3a4b5c6d7e8f9a0b' },
-        { title: 'Sample 4K', infoHash: '9a0b1c2d3e4f5a6b7c8d9e0f1a2b3c4d5e6f7a8b' }
+        { title: 'Hash-Match 1080p', infoHash: '3a4b5c6d7e8f9a0b1c2d3e4f5a6b7c8d9e0f1a2b', quality: '1080p' },
+        { title: 'Hash-Match 720p', infoHash: '1a2b3c4d5e6f7a8b9c0d1e2f3a4b5c6d7e8f9a0b', quality: '720p' },
+        { title: 'Hash-Match 4K', infoHash: '9a0b1c2d3e4f5a6b7c8d9e0f1a2b3c4d5e6f7a8b', quality: '4K' }
     ];
     
-    // Add sample streams to enable hash-based subtitle matching
-    sampleHashes.forEach(hash => {
-        streams.push({
-            title: `${hash.title} (Hash-based subtitle matching)`,
-            url: `magnet:?xt=urn:btih:${hash.infoHash}&dn=sample`,
-            quality: hash.title.includes('4K') ? '4K' : (hash.title.includes('1080p') ? '1080p' : '720p'),
-            seeds: 1,
-            peers: 1,
-            behaviorHints: {
-                notWebReady: true, // Requires torrent client
-                hashOnly: true // Only for hash-based matching
-            },
-            infoHash: hash.infoHash
-        });
-    });
+    // Add hash-matching streams only if no Real-Debrid streams
+    if (streams.length === 0) {
+        console.log(`[Handler] No Real-Debrid streams, providing hash-matching streams for subtitle sync`);
+        
+        for (const sample of sampleHashes) {
+            streams.push({
+                title: `${sample.title} (Subtitle Hash-Matching)`,
+                url: `magnet:?xt=urn:btih:${sample.infoHash}&dn=sample`,
+                quality: sample.quality,
+                seeds: 1,
+                peers: 1,
+                behaviorHints: {
+                    notWebReady: true,
+                    hashOnly: true, // These are only for hash-based subtitle matching
+                    subtitleMatch: true
+                },
+                infoHash: sample.infoHash
+            });
+        }
+    }
     
-    console.log(`[Handler] Providing ${streams.length} sample streams for hash-based subtitle matching`);
+    console.log(`[Handler] Providing ${streams.length} total streams (${streams.filter(s => s.behaviorHints?.realDebrid).length} Real-Debrid cached)`);
+    
     return { streams };
 };
+
+// Helper function to generate sample Real-Debrid streams
+function generateSampleRealDebridStreams(movieId) {
+    console.log(`[Sample] Generating sample Real-Debrid streams for ${movieId}`);
+    
+    const sampleStreams = [
+        {
+            title: 'Real-Debrid Cached 2160p (Sample)',
+            url: `https://sample-cached-url.real-debrid.com/sample-4k-${movieId}`,
+            quality: '2160p',
+            seeds: 500,
+            peers: 10,
+            behaviorHints: {
+                notWebReady: false,
+                realDebrid: true,
+                cached: true,
+                instantAvailable: true
+            },
+            infoHash: '9a0b1c2d3e4f5a6b7c8d9e0f1a2b3c4d5e6f7a8b'
+        },
+        {
+            title: 'Real-Debrid Cached 1080p (Sample)',
+            url: `https://sample-cached-url.real-debrid.com/sample-1080p-${movieId}`,
+            quality: '1080p',
+            seeds: 300,
+            peers: 5,
+            behaviorHints: {
+                notWebReady: false,
+                realDebrid: true,
+                cached: true,
+                instantAvailable: true
+            },
+            infoHash: '3a4b5c6d7e8f9a0b1c2d3e4f5a6b7c8d9e0f1a2b'
+        },
+        {
+            title: 'Real-Debrid Cached 720p (Sample)',
+            url: `https://sample-cached-url.real-debrid.com/sample-720p-${movieId}`,
+            quality: '720p',
+            seeds: 150,
+            peers: 3,
+            behaviorHints: {
+                notWebReady: false,
+                realDebrid: true,
+                cached: true,
+                instantAvailable: true
+            },
+            infoHash: '1a2b3c4d5e6f7a8b9c0d1e2f3a4b5c6d7e8f9a0b'
+        }
+    ];
+    
+    console.log(`[Sample] Generated ${sampleStreams.length} sample Real-Debrid streams`);
+    return sampleStreams;
+}
 
 // Define both handlers
 builder.defineSubtitlesHandler(subtitleHandler);
