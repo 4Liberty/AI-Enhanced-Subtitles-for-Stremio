@@ -25,8 +25,6 @@ Describe what you're trying to do and why.
 ## System Information
 **If relevant to your question:**
 - OS: [e.g. Windows 11, macOS 14.1, Ubuntu 22.04]
-- VLC Version: [e.g. 3.0.18]
-- Extension Version: [e.g. 1.0.0]
 
 ## Additional Context
 Add any other context about your question here.

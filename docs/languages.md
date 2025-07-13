@@ -1,6 +1,7 @@
+
 # Supported Languages
 
-This document lists all subtitle languages available on OpenSubtitles.com that can be used with the VLSub extension.
+This document lists all subtitle languages available on OpenSubtitles.com that can be used with the Stremio Subtitle Addon.
 
 ## 🌍 Available Languages
 
@@ -116,14 +117,9 @@ The following languages are supported for subtitle search and download:
 
 ## 🔍 How to Use Language Codes
 
-### In VLSub Extension
-1. Open VLC Media Player
-2. Go to **View → VLSub OpenSubtitles.com**
-3. In the language settings, use the **language code** from the table above
-4. You can set up to **3 preferred languages** for automatic selection
 
 ### Multiple Language Support
-The extension supports searching for subtitles in multiple languages simultaneously. Configure your preferred languages in order of priority:
+The Stremio Subtitle Addon supports searching for subtitles in multiple languages simultaneously. Configure your preferred languages in order of priority:
 
 1. **Primary language**: Your most preferred subtitle language
 2. **Secondary language**: Fallback if primary not available
@@ -174,13 +170,13 @@ The availability of subtitles varies by language. English (`en`) typically has t
 
 ## 🔄 API Integration
 
-These language codes are used directly with the OpenSubtitles.com REST API v2. The VLSub extension automatically handles the language filtering when searching for subtitles.
+These language codes are used directly with the OpenSubtitles.com REST API v2. The Stremio Subtitle Addon automatically handles the language filtering when searching for subtitles.
 
 ## 📚 References
 
 - [OpenSubtitles.com API Documentation](https://opensubtitles.stoplight.io/)
 - [ISO 639 Language Codes](https://en.wikipedia.org/wiki/List_of_ISO_639-1_codes)
-- [VLSub Extension Documentation](https://github.com/opensubtitles/vlsub-opensubtitles-com)
+
 
 ---
 

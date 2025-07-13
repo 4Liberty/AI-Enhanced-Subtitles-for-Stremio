@@ -36,7 +36,6 @@ A clear and concise description of any alternative solutions or features you've 
 
 ## Examples
 **Provide examples of how this feature works in other applications**
-If this feature exists in other subtitle tools or media players, provide examples.
 
 ## Additional Context
 Add any other context, mockups, or screenshots about the feature request here.
