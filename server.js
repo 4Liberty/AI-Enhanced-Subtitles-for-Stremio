@@ -1,3 +1,37 @@
+// --- ENVIRONMENT CHECKS ---
+function checkEnvVars() {
+    const missing = [];
+    if (!process.env.GEMINI_API_KEY) missing.push('GEMINI_API_KEY');
+    if (!process.env.OPENSUBTITLES_API_KEY) missing.push('OPENSUBTITLES_API_KEY');
+    if (!process.env.TMDB_API_KEY) missing.push('TMDB_API_KEY');
+    if (!process.env.SUBDL_API_KEY) missing.push('SUBDL_API_KEY');
+    if (missing.length) {
+        console.warn('[Startup] WARNING: Missing environment variables:', missing.join(', '));
+    } else {
+        console.log('[Startup] All required API keys are set.');
+    }
+}
+checkEnvVars();
+// Health check endpoint for diagnostics
+app.get('/health', async (req, res) => {
+    const checks = {};
+    // Check Gemini
+    checks.gemini = !!process.env.GEMINI_API_KEY;
+    // Check OpenSubtitles
+    checks.opensubtitles = !!process.env.OPENSUBTITLES_API_KEY;
+    // Check TMDb
+    checks.tmdb = !!process.env.TMDB_API_KEY;
+    // Check SubDL
+    checks.subdl = !!process.env.SUBDL_API_KEY;
+    // Try a simple fetch to TMDb if key present
+    if (checks.tmdb) {
+        try {
+            const tmdbRes = await fetch(`https://api.themoviedb.org/3/configuration?api_key=${process.env.TMDB_API_KEY}`);
+            checks.tmdb_online = tmdbRes.ok;
+        } catch { checks.tmdb_online = false; }
+    }
+    res.json(checks);
+});
 // server.js
 // --- FINAL STABLE VERSION v2.9.0 ---
 
@@ -22,8 +56,6 @@ const manifest = {
         "configurable": true
     }
 };
-
-builder.defineSubtitlesHandler(async (args) => {
 
 const builder = new addonBuilder(manifest);
 
