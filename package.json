@@ -16,7 +16,7 @@
   "license": "ISC",
   "dependencies": {
     "express": "^4.19.2",
-    "stremio-addon-sdk": "^1.6.10",
+    "stremio-addon-sdk": "^1.7.0",
     "node-fetch": "^2.6.7"
   },
   "engines": {
