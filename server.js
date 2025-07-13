@@ -68,10 +68,41 @@ builder.defineStreamHandler(async (args) => {
 
 const addonInterface = builder.getInterface();
 
-// --- Stremio Addon SDK HTTP server (for Stremio endpoints only) ---
-serveHTTP(addonInterface, { port: process.env.PORT || 7000 });
+// --- Stremio Addon SDK HTTP server (for Stremio endpoints and .srt endpoint) ---
+const stremioPort = process.env.PORT || 7000;
+serveHTTP({
+    ...addonInterface,
+    // Custom HTTP handler for .srt files
+    get(req, res, next) {
+        // Only handle /subtitles/:videoId/:language.srt
+        const match = req.url.match(/^\/subtitles\/([^\/]+)\/([a-z]{2})\.srt(\?.*)?$/);
+        if (match) {
+            const videoId = match[1];
+            const language = match[2];
+            console.log(`[Stremio HTTP] AI Subtitle file request hit. Video ID: ${videoId}, Lang: ${language}`);
+            getAICorrectedSubtitle(videoId, language).then(correctedContent => {
+                if (correctedContent) {
+                    res.setHeader('Content-Type', 'text/plain; charset=utf-8');
+                    res.end(correctedContent);
+                } else {
+                    console.error(`[Stremio HTTP] Subtitle generation failed for ${videoId}`);
+                    res.statusCode = 404;
+                    res.end('Subtitle could not be generated.');
+                }
+            }).catch(err => {
+                console.error('[Stremio HTTP] Error in .srt handler:', err);
+                res.statusCode = 500;
+                res.end('Internal server error.');
+            });
+            return;
+        }
+        // Fallback to default handler
+        if (typeof addonInterface.get === 'function') return addonInterface.get(req, res, next);
+        next();
+    }
+}, { port: stremioPort });
 
-// --- Express server for custom endpoints (health, config, .srt, etc.) ---
+// --- Express server for management endpoints (health, config, etc.) ---
 const app = express();
 const mgmtPort = process.env.MGMT_PORT || 7001;
 
@@ -124,19 +155,7 @@ function asyncRoute(handler) {
     };
 }
 
-// Route for serving the actual .srt files.
-app.get('/subtitles/:videoId/:language.srt', asyncRoute(async (req, res) => {
-    const { videoId, language } = req.params;
-    console.log(`[Endpoint] AI Subtitle file request hit. Video ID: ${videoId}, Lang: ${language}`);
-    const correctedContent = await getAICorrectedSubtitle(videoId, language);
-    if (correctedContent) {
-        res.setHeader('Content-Type', 'text/plain; charset=utf-8');
-        res.send(correctedContent);
-    } else {
-        console.error(`[Endpoint] Subtitle generation failed for ${videoId}`);
-        res.status(404).send('Subtitle could not be generated.');
-    }
-}));
+// (No longer needed: .srt endpoint is now served from Stremio HTTP server)
 
 
 // Explicit manifest route for extra robustness
