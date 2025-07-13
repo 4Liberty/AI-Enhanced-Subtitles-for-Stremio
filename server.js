@@ -4,7 +4,7 @@
 const express = require('express');
 const { addonBuilder, serveHTTP } = require('stremio-addon-sdk');
 const path = require('path');
-const { getAICorrectedSubtitle, getSubtitleUrlsForStremio, getCachedSubtitleContent } = require('./lib/subtitleMatcher');
+const { getAICorrectedSubtitle, getSubtitleUrlsForStremio, getCachedSubtitleContent, getProgressiveSubtitleContent, aiEnhancementStatus } = require('./lib/subtitleMatcher');
 const { getEnrichedStreams } = require('./lib/streamEnricher');
 
 console.log("Starting Stremio AI Subtitle Addon v2.9.1...");
@@ -198,9 +198,32 @@ app.get('/manifest.json', (req, res) => {
 // IMPORTANT: .srt route MUST come before other subtitle routes to prevent conflicts
 app.get('/subtitles/:videoId/:language.srt', async (req, res) => {
     const { videoId, language } = req.params;
-    const { hash, test, fallback, source } = req.query;
+    const { hash, test, fallback, source, progressive } = req.query;
     
-    console.log(`[SRT Endpoint] Subtitle file request. Video ID: ${videoId}, Lang: ${language}, Hash: ${hash}, Test: ${test}, Fallback: ${fallback}, Source: ${source}`);
+    console.log(`[SRT Endpoint] Subtitle file request. Video ID: ${videoId}, Lang: ${language}, Hash: ${hash}, Test: ${test}, Fallback: ${fallback}, Source: ${source}, Progressive: ${progressive}`);
+
+    // Handle progressive AI-enhanced subtitles
+    if (progressive === 'true' && source) {
+        const baseSource = source.replace('-ai', ''); // Remove -ai suffix to get base source
+        console.log(`[SRT Endpoint] Progressive request for ${baseSource}, checking AI enhancement status...`);
+        
+        const progressiveContent = getProgressiveSubtitleContent(videoId, baseSource);
+        if (progressiveContent) {
+            const enhancementKey = `${videoId}-${baseSource}-ai`;
+            const aiStatus = aiEnhancementStatus.get(enhancementKey);
+            const isAiEnhanced = aiStatus === 'completed';
+            
+            console.log(`[SRT Endpoint] Serving ${isAiEnhanced ? 'AI-enhanced' : 'original'} progressive subtitle for ${baseSource} (AI status: ${aiStatus})`);
+            res.setHeader('Content-Type', 'text/plain; charset=utf-8');
+            res.setHeader('Content-Disposition', `attachment; filename="${videoId}_${language}_${isAiEnhanced ? 'ai' : 'original'}.srt"`);
+            res.setHeader('X-AI-Enhanced', isAiEnhanced ? 'true' : 'false');
+            res.setHeader('X-AI-Status', aiStatus || 'unknown');
+            res.send(progressiveContent);
+            return;
+        } else {
+            console.log(`[SRT Endpoint] No progressive content found for ${baseSource}, falling back to traditional method`);
+        }
+    }
 
     // If we have a specific source (subdl, podnapisi, opensubtitles), serve the cached content
     if (source && (source === 'subdl' || source === 'podnapisi' || source === 'opensubtitles' || 
