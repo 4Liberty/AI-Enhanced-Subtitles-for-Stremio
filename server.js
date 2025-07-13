@@ -4,7 +4,7 @@
 const express = require('express');
 const { addonBuilder, serveHTTP } = require('stremio-addon-sdk');
 const path = require('path');
-const { getAICorrectedSubtitle, getSubtitleUrlsForStremio } = require('./lib/subtitleMatcher');
+const { getAICorrectedSubtitle, getSubtitleUrlsForStremio, getCachedSubtitleContent } = require('./lib/subtitleMatcher');
 const { getEnrichedStreams } = require('./lib/streamEnricher');
 
 console.log("Starting Stremio AI Subtitle Addon v2.9.1...");
@@ -171,9 +171,23 @@ app.get('/manifest.json', (req, res) => {
 // IMPORTANT: .srt route MUST come before other subtitle routes to prevent conflicts
 app.get('/subtitles/:videoId/:language.srt', async (req, res) => {
     const { videoId, language } = req.params;
-    const { hash, test, fallback } = req.query;
+    const { hash, test, fallback, source } = req.query;
     
-    console.log(`[SRT Endpoint] Subtitle file request. Video ID: ${videoId}, Lang: ${language}, Hash: ${hash}, Test: ${test}, Fallback: ${fallback}`);
+    console.log(`[SRT Endpoint] Subtitle file request. Video ID: ${videoId}, Lang: ${language}, Hash: ${hash}, Test: ${test}, Fallback: ${fallback}, Source: ${source}`);
+
+    // If we have a specific source (subdl, podnapisi), serve the cached content
+    if (source && (source === 'subdl' || source === 'podnapisi' || source === 'subdl-original' || source === 'podnapisi-original' || source === 'subdl-error')) {
+        const cachedContent = getCachedSubtitleContent(videoId, source);
+        if (cachedContent) {
+            console.log(`[SRT Endpoint] Serving cached ${source} subtitle for ${videoId}`);
+            res.setHeader('Content-Type', 'text/plain; charset=utf-8');
+            res.setHeader('Content-Disposition', `attachment; filename="${videoId}_${language}_${source}.srt"`);
+            res.send(cachedContent);
+            return;
+        } else {
+            console.log(`[SRT Endpoint] No cached content found for ${videoId} from ${source}`);
+        }
+    }
 
     // If in test mode (no API keys), return a sample subtitle
     if (test === 'true') {
@@ -216,7 +230,7 @@ No external subtitle sources available
     }
 
     try {
-        const aiSubtitle = await getAICorrectedSubtitle(videoId, hash);
+        const aiSubtitle = await getAICorrectedSubtitle(videoId, language);
         if (aiSubtitle) {
             res.setHeader('Content-Type', 'text/plain; charset=utf-8');
             res.setHeader('Content-Disposition', `attachment; filename="${videoId}_${language}.srt"`);
