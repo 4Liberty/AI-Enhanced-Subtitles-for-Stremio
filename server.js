@@ -65,6 +65,47 @@ const configureRoute = (req, res) => {
 app.get('/', configureRoute);
 app.get('/configure', configureRoute);
 
+
+// Helper to ensure absolute URLs in subtitle options
+function absolutizeSubtitleUrls(result, req) {
+    if (!result || !result.subtitles) return result;
+    const base = req.protocol + '://' + req.get('host');
+    result.subtitles = result.subtitles.map(sub => {
+        if (sub.url && sub.url.startsWith('/')) {
+            return { ...sub, url: base + sub.url };
+        }
+        return sub;
+    });
+    return result;
+}
+
+// Stremio subtitles resource endpoint (Stremio expects this for subtitle options)
+app.get('/subtitles/:type/:id.json', async (req, res) => {
+    const { type, id } = req.params;
+    const infoHash = req.query.hash || null;
+    let result = await getSubtitleUrlsForStremio(id, infoHash);
+    result = absolutizeSubtitleUrls(result, req);
+    res.json(result);
+});
+
+// Also support GET /subtitles/:type/:id for maximum compatibility
+app.get('/subtitles/:type/:id', async (req, res) => {
+    const { type, id } = req.params;
+    const infoHash = req.query.hash || null;
+    let result = await getSubtitleUrlsForStremio(id, infoHash);
+    result = absolutizeSubtitleUrls(result, req);
+    res.json(result);
+});
+
+// POST support for legacy Stremio clients
+app.post('/subtitles/:type/:id', express.json(), async (req, res) => {
+    const { type, id } = req.params;
+    const infoHash = req.body?.extra?.video_hash || null;
+    let result = await getSubtitleUrlsForStremio(id, infoHash);
+    result = absolutizeSubtitleUrls(result, req);
+    res.json(result);
+});
+
 // Route for serving the actual .srt files.
 app.get('/subtitles/:videoId/:language.srt', (req, res) => {
     const { videoId, language } = req.params;
