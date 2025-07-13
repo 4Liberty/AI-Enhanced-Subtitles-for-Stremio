@@ -1,37 +1,61 @@
 # Stremio Subtitle Addon Debug Status
 
-## Current Issues Identified
+## Current Status - MAJOR PROGRESS MADE ✅
 
-### 1. Missing API Keys
-- `SUBDL_API_KEY` - **REQUIRED** for SubDL subtitle source
-- `OPENSUBTITLES_API_KEY` - **REQUIRED** for OpenSubtitles fallback
-- `GEMINI_API_KEY` - **REQUIRED** for AI subtitle correction
+### 1. API Keys Status
+- ✅ `SUBDL_API_KEY` - **WORKING** 
+- ✅ `OPENSUBTITLES_API_KEY` - **WORKING**
+- ✅ `GEMINI_API_KEY` - **WORKING**
 
 ### 2. Subtitle Sources Status
-- **SubDL**: Not working (missing API key)
-- **Podnapisi**: Disabled (returning HTML instead of JSON)
-- **OpenSubtitles**: Not working (missing API key)
-- **Test Mode**: Added for debugging when API keys are missing
+- ✅ **SubDL**: **WORKING** - Successfully finding and extracting Turkish subtitles
+- ❌ **Podnapisi**: Not finding Turkish download links (needs debugging)
+- ✅ **OpenSubtitles**: **WORKING** as fallback
+- ✅ **Hash Matching**: Needs implementation priority system
 
 ### 3. Stremio Integration Status
 - ✅ Addon installation works
 - ✅ Stream requests work (pre-caching)
-- ✅ Subtitle endpoints added
-- ❌ Subtitles don't appear in Stremio UI
+- ✅ Subtitle endpoints working
+- ✅ **Subtitles appear in Stremio UI** 
+- ❌ **AI Enhancement timing out** (8s too short)
+- ❌ **Priority system needs fixing** (hash → AI → original)
 
-## Changes Made
+## Implementation Changes - NEW PRIORITY SYSTEM ✅
 
-### Server.js
-- Added comprehensive API key checking and warnings
-- Added missing subtitle endpoints: `/subtitles/:type/:id` and `/subtitles/:type/:id.json`
-- Enhanced logging for all requests
-- Added test subtitle support for debugging
+### Priority System Implementation:
+1. **PRIORITY 1: Hash-Matched Subtitles** (if infoHash provided)
+   - Best quality - exact match to torrent file
+   - Uses SubDL with torrent hash
+   - Label: "SubDL Hash-Matched Turkish"
 
-### lib/subtitleMatcher.js
-- Added detailed logging for all subtitle sources
-- Temporarily disabled Podnapisi (API issues)
-- Added comprehensive error handling
-- Added test subtitle mode when no API keys are available
+2. **PRIORITY 2: AI-Enhanced External Subtitles**
+   - SubDL ID-based search with 30-second AI enhancement
+   - Fallback to original if AI fails/insufficient
+   - Label: "SubDL AI-Enhanced Turkish" or "SubDL Turkish (Original)"
+
+3. **PRIORITY 3: Podnapisi with AI Enhancement** (if no SubDL)
+   - Only if SubDL completely fails
+   - AI enhancement with original fallback
+   - Label: "Podnapisi AI-Enhanced Turkish" or "Podnapisi Turkish (Original)"
+
+4. **PRIORITY 4: OpenSubtitles AI Fallback**
+   - Last resort when all external sources fail
+   - Always available as final option
+   - Label: "OpenSubtitles AI Turkish"
+
+### Technical Improvements:
+- ✅ **AI Timeout**: Increased from 8s to 30s for complex processing
+- ✅ **Smart AI Fallback**: Returns original content instead of tiny fallbacks
+- ✅ **Quality Validation**: AI result must be ≥80% of original size
+- ✅ **Hash Support**: Proper hash-matched subtitle priority
+- ✅ **Error Handling**: Robust fallback chain with meaningful responses
+
+### Next Steps:
+1. Test hash-matched subtitles with torrent info
+2. Verify 30-second AI timeout works
+3. Ensure priority system works correctly
+4. Debug Podnapisi Turkish link detection
 
 ## How to Test
 
