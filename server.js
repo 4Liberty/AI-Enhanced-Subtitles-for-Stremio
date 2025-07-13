@@ -1,6 +1,8 @@
 // --- ENVIRONMENT CHECKS ---
 
+const fs = require('fs');
 const express = require('express');
+const app = express();
 const { addonBuilder } = require('stremio-addon-sdk');
 const path = require('path');
 const { getAICorrectedSubtitle, getSubtitleUrlsForStremio } = require('./lib/subtitleMatcher');
@@ -69,8 +71,6 @@ builder.defineStreamHandler(async (args) => {
 const addonInterface = builder.getInterface();
 
 // --- Stremio Addon SDK HTTP server (for Stremio endpoints and .srt endpoint) ---
-const fs = require('fs');
-// 'express' and 'app' are already declared above, do not redeclare.
 const port = process.env.PORT || 7000;
 
 // Stremio Addon manifest endpoint
