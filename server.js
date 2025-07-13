@@ -5,6 +5,7 @@ const express = require('express');
 const { addonBuilder, serveHTTP } = require('stremio-addon-sdk');
 const path = require('path');
 const { getAICorrectedSubtitle, getSubtitleUrlsForStremio } = require('./lib/subtitleMatcher');
+const { getEnrichedStreams } = require('./lib/streamEnricher');
 
 console.log("Starting Stremio AI Subtitle Addon v2.9.0...");
 
@@ -13,7 +14,7 @@ const manifest = {
     "version": "2.9.0",
     "name": "AI Subtitle Corrector (TR)",
     "description": "Provides AI-corrected Turkish subtitles with a full customization UI and hash-matching.",
-    "resources": ["subtitles"],
+    "resources": ["subtitles", "stream"],
     "types": ["movie", "series"],
     "idPrefixes": ["tt", "tmdb"],
     "catalogs": [],
@@ -22,6 +23,8 @@ const manifest = {
     }
 };
 
+builder.defineSubtitlesHandler(async (args) => {
+
 const builder = new addonBuilder(manifest);
 
 builder.defineSubtitlesHandler(async (args) => {
@@ -29,23 +32,32 @@ builder.defineSubtitlesHandler(async (args) => {
     try {
         const infoHash = args.extra && args.extra.video_hash ? args.extra.video_hash : null;
         const result = await getSubtitleUrlsForStremio(args.id, infoHash);
-        
         if (result && result.subtitles && result.subtitles.length > 0) {
             console.log(`[Handler] Successfully generated ${result.subtitles.length} subtitle option(s).`);
         }
-        return Promise.resolve(result);
+        return result;
     } catch (error) {
         console.error("[Handler] Error in subtitle handler:", error);
-        return Promise.resolve({ subtitles: [] });
+        return { subtitles: [] };
+    }
+});
+
+builder.defineStreamHandler(async (args) => {
+    console.log(`[Handler] Stream request received for: ${args.id}`);
+    // You would fetch streams from your provider here. For demo, use an empty array.
+    const streams = []; // Replace with actual stream fetching logic if needed.
+    try {
+        const enriched = await getEnrichedStreams(args.type, args.id, streams);
+        return { streams: enriched };
+    } catch (error) {
+        console.error("[Handler] Error in stream handler:", error);
+        return { streams: [] };
     }
 });
 
 const addonInterface = builder.getInterface();
 const app = express();
 const port = process.env.PORT || 7000;
-
-// Create the Stremio addon request handler.
-const addonHandler = serveHTTP(addonInterface);
 
 // Route for the configuration page.
 const configureRoute = (req, res) => {
@@ -75,12 +87,10 @@ app.get('/subtitles/:videoId/:language.srt', (req, res) => {
         });
 });
 
+
 // All other requests are handled by the Stremio addon SDK.
-// This will handle /manifest.json and the subtitle list requests.
-app.use((req, res, next) => {
-    // Pass the request to the Stremio addon handler.
-    addonHandler(req, res, next);
-});
+// This will handle /manifest.json, /subtitles, and /stream requests.
+app.use(serveHTTP(addonInterface));
 
 app.listen(port, () => {
     console.log(`Addon running at: http://127.0.0.1:${port}`);
