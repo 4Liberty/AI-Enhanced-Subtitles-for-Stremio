@@ -1,7 +1,7 @@
 // --- ENVIRONMENT CHECKS ---
 
 const express = require('express');
-const { addonBuilder, serveHTTP } = require('stremio-addon-sdk');
+const { addonBuilder } = require('stremio-addon-sdk');
 const path = require('path');
 const { getAICorrectedSubtitle, getSubtitleUrlsForStremio } = require('./lib/subtitleMatcher');
 const fetch = require('node-fetch');
@@ -69,7 +69,95 @@ builder.defineStreamHandler(async (args) => {
 const addonInterface = builder.getInterface();
 
 // --- Stremio Addon SDK HTTP server (for Stremio endpoints and .srt endpoint) ---
-const stremioPort = process.env.PORT || 7000;
+const fs = require('fs');
+const express = require('express');
+const app = express();
+const port = process.env.PORT || 7000;
+
+// Stremio Addon manifest endpoint
+app.get('/manifest.json', (req, res) => {
+    res.setHeader('Content-Type', 'application/json');
+    res.send(JSON.stringify(addonInterface.manifest));
+});
+
+// Stremio subtitles resource endpoint (.srt)
+app.get('/subtitles/:videoId/:language.srt', async (req, res) => {
+    const { videoId, language } = req.params;
+    console.log(`[Express] AI Subtitle file request hit. Video ID: ${videoId}, Lang: ${language}`);
+    try {
+        const correctedContent = await getAICorrectedSubtitle(videoId, language);
+        if (correctedContent) {
+            res.setHeader('Content-Type', 'text/plain; charset=utf-8');
+            res.end(correctedContent);
+        } else {
+            console.error(`[Express] Subtitle generation failed for ${videoId}`);
+            res.status(404).end('Subtitle could not be generated.');
+        }
+    } catch (err) {
+        console.error('[Express] Error in .srt handler:', err);
+        res.status(500).end('Internal server error.');
+    }
+});
+
+// Stremio subtitles/stream resource endpoints (POST)
+app.post('/:resource/:type/:id', express.json(), async (req, res) => {
+    const { resource, type, id } = req.params;
+    if (resource === 'subtitles') {
+        const infoHash = req.body?.extra?.video_hash || null;
+        const result = await getSubtitleUrlsForStremio(id, infoHash);
+        res.json(result);
+    } else if (resource === 'stream') {
+        const streams = await getEnrichedStreams(type, id, []);
+        res.json({ streams });
+    } else {
+        res.status(404).json({ error: 'Unknown resource' });
+    }
+});
+
+// Configuration page
+app.get(['/', '/configure', '/configure/'], (req, res) => {
+    const filePath = path.join(__dirname, 'configure.html');
+    fs.readFile(filePath, (err, data) => {
+        if (err) {
+            res.status(500).end('Could not load configure.html');
+        } else {
+            res.setHeader('Content-Type', 'text/html; charset=utf-8');
+            res.end(data);
+        }
+    });
+});
+
+// Health check endpoint
+app.get(['/health', '/health/'], async (req, res) => {
+    const checks = {};
+    checks.gemini = !!process.env.GEMINI_API_KEY;
+    checks.opensubtitles = !!process.env.OPENSUBTITLES_API_KEY;
+    checks.tmdb = !!process.env.TMDB_API_KEY;
+    checks.subdl = !!process.env.SUBDL_API_KEY;
+    if (checks.tmdb) {
+        try {
+            const tmdbRes = await fetch(`https://api.themoviedb.org/3/configuration?api_key=${process.env.TMDB_API_KEY}`);
+            checks.tmdb_online = tmdbRes.ok;
+        } catch { checks.tmdb_online = false; }
+    }
+    res.json(checks);
+});
+
+// Global error handler
+app.use((err, req, res, next) => {
+    console.error('[Global Error Handler]', err);
+    if (!res.headersSent) {
+        res.status(500).send('Internal server error.');
+    }
+});
+
+app.listen(port, () => {
+    console.log(`Stremio Addon & all endpoints running at: http://0.0.0.0:${port}`);
+    console.log(`Manifest: http://0.0.0.0:${port}/manifest.json`);
+    console.log(`Health: http://0.0.0.0:${port}/health`);
+    console.log(`Configure: http://0.0.0.0:${port}/configure`);
+    console.log(`Subtitle .srt: http://0.0.0.0:${port}/subtitles/:videoId/:language.srt`);
+});
 
 const fs = require('fs');
 serveHTTP({
@@ -167,57 +255,3 @@ app.get('/health', async (req, res) => {
 });
 
 // Route for the configuration page.
-const configureRoute = (req, res) => {
-    res.sendFile(path.join(__dirname, 'configure.html'));
-};
-app.get('/', configureRoute);
-app.get('/configure', configureRoute);
-
-// Helper: robust fetch with retries and timeout
-async function robustFetch(url, options = {}, retries = 2, timeoutMs = 8000) {
-    for (let i = 0; i <= retries; i++) {
-        try {
-            const controller = new AbortController();
-            const timeout = setTimeout(() => controller.abort(), timeoutMs);
-            const res = await fetch(url, { ...options, signal: controller.signal });
-            clearTimeout(timeout);
-            if (res.ok) return res;
-        } catch (e) {
-            if (i === retries) return null;
-        }
-    }
-    return null;
-}
-
-// Async route wrapper to catch errors and pass to Express error handler
-function asyncRoute(handler) {
-    return (req, res, next) => {
-        Promise.resolve(handler(req, res, next)).catch(next);
-    };
-}
-
-// (No longer needed: .srt endpoint is now served from Stremio HTTP server)
-
-
-// Explicit manifest route for extra robustness
-app.get('/manifest.json', (req, res) => {
-    res.setHeader('Content-Type', 'application/json');
-    res.send(JSON.stringify(addonInterface.manifest));
-});
-
-
-
-// Global error handler for uncaught errors in async routes
-app.use((err, req, res, next) => {
-    console.error('[Global Error Handler]', err);
-    if (!res.headersSent) {
-        res.status(500).send('Internal server error.');
-    }
-});
-
-app.listen(mgmtPort, () => {
-    console.log(`Express management endpoints running at: http://127.0.0.1:${mgmtPort}`);
-    console.log(`Health check: http://127.0.0.1:${mgmtPort}/health`);
-    console.log(`Configuration page: http://127.0.0.1:${mgmtPort}/ or /configure`);
-    console.log(`Subtitle .srt endpoint: http://127.0.0.1:${mgmtPort}/subtitles/:videoId/:language.srt`);
-});

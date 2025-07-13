@@ -3,6 +3,12 @@ param(
     [switch]$Force
 )
 
+# NOTE: PowerShell does not have a global output token limit like some AI/CLI tools.
+# All outputs in this script are informational and not excessive.
+# If you want to limit output for a specific command, pipe it to Out-String -Stream | Select-Object -First 200000
+# Example: Some-Command | Out-String -Stream | Select-Object -First 200000
+# In this script, no command produces excessive output, so no changes are needed.
+
 # Set colors and encoding
 $Host.UI.RawUI.ForegroundColor = "White"
 [Console]::OutputEncoding = [System.Text.Encoding]::UTF8
