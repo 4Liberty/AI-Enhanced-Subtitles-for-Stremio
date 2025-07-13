@@ -9,6 +9,33 @@ const { getEnrichedStreams } = require('./lib/streamEnricher');
 
 console.log("Starting Stremio AI Subtitle Addon v2.9.1...");
 
+// Check for required environment variables
+const requiredEnvVars = [
+    'SUBDL_API_KEY',
+    'OPENSUBTITLES_API_KEY',
+    'GEMINI_API_KEY'
+];
+
+console.log("Environment variable status:");
+requiredEnvVars.forEach(varName => {
+    const isSet = !!process.env[varName];
+    console.log(`  ${varName}: ${isSet ? 'SET' : 'MISSING'}`);
+    if (!isSet) {
+        console.warn(`  WARNING: ${varName} is not set - related functionality will be disabled`);
+    }
+});
+
+// Add sample API key setup instructions
+if (!process.env.SUBDL_API_KEY) {
+    console.log("\n  To get SUBDL_API_KEY: Visit https://subdl.com/api and register");
+}
+if (!process.env.OPENSUBTITLES_API_KEY) {
+    console.log("  To get OPENSUBTITLES_API_KEY: Visit https://opensubtitles.com/api and register");
+}
+if (!process.env.GEMINI_API_KEY) {
+    console.log("  To get GEMINI_API_KEY: Visit https://ai.google.dev/ and get an API key");
+}
+
 const manifest = {
     id: "com.stremio.ai.subtitle.corrector.tr.final",
     version: "2.9.1",
@@ -227,12 +254,35 @@ app.get('/subtitles/:type/:id/:filename.json', async (req, res) => {
 // Route for serving the actual .srt files
 app.get('/subtitles/:videoId/:language.srt', (req, res) => {
     const { videoId, language } = req.params;
-    console.log(`[Endpoint] AI Subtitle file request hit. Video ID: ${videoId}, Lang: ${language}`);
+    const { hash, test } = req.query;
+    
+    console.log(`[Endpoint] AI Subtitle file request. Video ID: ${videoId}, Lang: ${language}, Hash: ${hash}, Test: ${test}`);
 
-    getAICorrectedSubtitle(videoId, language)
+    // If in test mode (no API keys), return a sample subtitle
+    if (test === 'true') {
+        const testSubtitle = `1
+00:00:01,000 --> 00:00:05,000
+Test Turkish subtitle for debugging
+
+2
+00:00:06,000 --> 00:00:10,000
+API Keys not configured - this is a test subtitle
+
+3
+00:00:11,000 --> 00:00:15,000
+VideoId: ${videoId}
+`;
+        res.setHeader('Content-Type', 'text/plain; charset=utf-8');
+        res.setHeader('Content-Disposition', `attachment; filename="${videoId}_${language}.srt"`);
+        res.send(testSubtitle);
+        return;
+    }
+
+    getAICorrectedSubtitle(videoId, hash)
         .then(correctedContent => {
             if (correctedContent) {
                 res.setHeader('Content-Type', 'text/plain; charset=utf-8');
+                res.setHeader('Content-Disposition', `attachment; filename="${videoId}_${language}.srt"`);
                 res.send(correctedContent);
             } else {
                 console.error(`[Endpoint] Subtitle generation failed for ${videoId}`);
@@ -243,6 +293,53 @@ app.get('/subtitles/:videoId/:language.srt', (req, res) => {
             console.error("[Endpoint] CRITICAL ERROR while getting AI subtitle:", err);
             res.status(500).send('Internal server error.');
         });
+});
+
+// Subtitle resource endpoints (POST and GET for compatibility)
+app.post('/subtitles/:type/:id', async (req, res) => {
+    const { type, id } = req.params;
+    console.log(`[Express] POST /subtitles/${type}/${id} - Body:`, JSON.stringify(req.body, null, 2));
+    try {
+        const args = { type, id, extra: req.body?.extra || {} };
+        const result = await subtitleHandler(args);
+        result.subtitles = absolutizeSubtitleUrls(result, req).subtitles;
+        console.log(`[Express] POST subtitle result:`, JSON.stringify(result, null, 2));
+        res.json(result);
+    } catch (err) {
+        console.error('[Express] Error in subtitle POST endpoint:', err);
+        res.status(500).json({ subtitles: [] });
+    }
+});
+
+app.get('/subtitles/:type/:id', async (req, res) => {
+    const { type, id } = req.params;
+    console.log(`[Express] GET /subtitles/${type}/${id} - Query:`, JSON.stringify(req.query, null, 2));
+    try {
+        const args = { type, id, extra: req.query || {} };
+        const result = await subtitleHandler(args);
+        result.subtitles = absolutizeSubtitleUrls(result, req).subtitles;
+        console.log(`[Express] GET subtitle result:`, JSON.stringify(result, null, 2));
+        res.json(result);
+    } catch (err) {
+        console.error('[Express] Error in subtitle GET endpoint:', err);
+        res.status(500).json({ subtitles: [] });
+    }
+});
+
+// Support for .json extension on subtitle endpoints
+app.get('/subtitles/:type/:id.json', async (req, res) => {
+    const { type, id } = req.params;
+    console.log(`[Express] GET /subtitles/${type}/${id}.json - Query:`, JSON.stringify(req.query, null, 2));
+    try {
+        const args = { type, id, extra: req.query || {} };
+        const result = await subtitleHandler(args);
+        result.subtitles = absolutizeSubtitleUrls(result, req).subtitles;
+        console.log(`[Express] .json subtitle result:`, JSON.stringify(result, null, 2));
+        res.json(result);
+    } catch (err) {
+        console.error('[Express] Error in subtitle .json endpoint:', err);
+        res.status(500).json({ subtitles: [] });
+    }
 });
 
 // Stream resource endpoints (POST and GET for compatibility)
