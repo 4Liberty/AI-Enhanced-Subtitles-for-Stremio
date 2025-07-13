@@ -7,8 +7,18 @@ const path = require('path');
 const { getAICorrectedSubtitle, getSubtitleUrlsForStremio, getCachedSubtitleContent, getProgressiveSubtitleContent, aiEnhancementStatus } = require('./lib/subtitleMatcher');
 const { getEnrichedStreams } = require('./lib/streamEnricher');
 const { generateRealDebridStreams, generateSampleRealDebridStreams } = require('./lib/realDebridSearch');
+const { setupUIRoutes } = require('./ui-api');
 
-console.log("Starting Stremio AI Subtitle Addon v2.9.1...");
+console.log("Starting Stremio AI Subtitle Addon v2.9.1 with Beautiful UI...");
+
+console.log(`
+██╗  ██╗██████╗ ██╗     ███████╗██╗     ██╗██╗  ██╗██╗   ██╗██╗     ██╗██╗  ██╗
+██║  ██║██╔══██╗██║     ██╔════╝██║     ██║██║  ██║██║   ██║██║     ██║██║  ██║
+███████║██████╔╝██║     █████╗  ██║     ██║███████║██║   ██║██║     ██║███████║
+██╔══██║██╔═══╝ ██║     ██╔══╝  ██║     ██║██╔══██║██║   ██║██║     ██║██╔══██║
+██║  ██║██║     ██║     ███████╗███████╗██║██║  ██║╚██████╔╝███████╗██║██║  ██║
+╚═╝  ╚═╝╚═╝     ╚═╝     ╚══════╝╚══════╝╚═╝╚═╝  ╚═╝ ╚═════╝ ╚══════╝╚═╝╚═╝  ╚═╝
+`);
 
 // Check for required environment variables
 const requiredEnvVars = [
@@ -50,6 +60,9 @@ if (!process.env.GEMINI_API_KEY) {
 if (!process.env.REAL_DEBRID_API_KEY) {
     console.log("  To get REAL_DEBRID_API_KEY: Visit https://real-debrid.com/api and get an API key");
 }
+
+console.log("\n🎨 Beautiful UI will be available at: http://localhost:7000/ui");
+console.log("📊 Advanced health monitoring and settings included!");
 
 const manifest = {
     id: "com.stremio.ai.subtitle.corrector.tr.final",
@@ -265,6 +278,9 @@ const configureRoute = (req, res) => {
 };
 app.get('/', configureRoute);
 app.get('/configure', configureRoute);
+
+// Setup UI routes
+setupUIRoutes(app);
 
 // Helper to ensure absolute URLs in subtitle options
 function absolutizeSubtitleUrls(result, req) {
@@ -543,7 +559,10 @@ app.get('/stream/:type/:id.json', async (req, res) => {
     }
 });
 
-// Health check endpoint
+// Setup beautiful UI with health monitoring
+setupUIRoutes(app);
+
+// Legacy health check endpoint (maintained for compatibility)
 app.get('/health', async (req, res) => {
     const checks = {};
     checks.gemini = !!process.env.GEMINI_API_KEY;
@@ -561,9 +580,19 @@ app.get('/health', async (req, res) => {
 });
 
 app.listen(port, () => {
-    console.log(`Addon running at: http://0.0.0.0:${port}`);
-    console.log(`Manifest: http://0.0.0.0:${port}/manifest.json`);
-    console.log(`Health: http://0.0.0.0:${port}/health`);
-    console.log(`Configure: http://0.0.0.0:${port}/configure`);
-    console.log(`Subtitle .srt: http://0.0.0.0:${port}/subtitles/:videoId/:language.srt`);
+    console.log(`\n🚀 VLC Subtitle & Real-Debrid Extension is running!`);
+    console.log(`📍 Main URL: http://0.0.0.0:${port}`);
+    console.log(`🎨 Beautiful UI: http://0.0.0.0:${port}/ui`);
+    console.log(`📋 Manifest: http://0.0.0.0:${port}/manifest.json`);
+    console.log(`💚 Health: http://0.0.0.0:${port}/health`);
+    console.log(`⚙️  Configure: http://0.0.0.0:${port}/configure`);
+    console.log(`📝 Subtitle .srt: http://0.0.0.0:${port}/subtitles/:videoId/:language.srt`);
+    console.log(`\n✨ Features available:`);
+    console.log(`   • AI-powered subtitle correction with Google Gemini`);
+    console.log(`   • Real-Debrid torrent streaming with 20+ providers`);
+    console.log(`   • Web scraping support for 1337x, KAT, MagnetDL`);
+    console.log(`   • Advanced health monitoring & performance metrics`);
+    console.log(`   • Beautiful modern UI with comprehensive settings`);
+    console.log(`   • Real-time system status & error tracking`);
+    console.log(`\n🔗 Open http://localhost:${port}/ui to access the control panel!`);
 });

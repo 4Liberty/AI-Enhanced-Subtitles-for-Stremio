@@ -1,0 +1,551 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Stremio AI Subtitle & Real-Debrid Addon - Control Panel</title>
+    <link rel="stylesheet" href="styles.css">
+    <link rel="icon" href="../logo.svg" type="image/svg+xml">
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/js/all.min.js"></script>
+</head>
+<body>
+    <div class="app-container">
+        <!-- Header -->
+        <header class="header">
+            <div class="header-content">
+                <div class="logo-section">
+                    <img src="../logo.svg" alt="Logo" class="logo">
+                    <div class="title-section">
+                        <h1>Stremio AI Subtitle & Real-Debrid Addon</h1>
+                        <p class="subtitle">AI-powered Turkish subtitles with cached torrent streaming</p>
+                    </div>
+                </div>
+                <div class="status-indicator" id="overall-status">
+                    <div class="status-dot status-loading"></div>
+                    <span>Initializing...</span>
+                </div>
+            </div>
+        </header>
+
+        <!-- Navigation -->
+        <nav class="nav-tabs">
+            <button class="nav-tab active" data-tab="dashboard">
+                <i class="fas fa-tachometer-alt"></i> Dashboard
+            </button>
+            <button class="nav-tab" data-tab="subtitles">
+                <i class="fas fa-closed-captioning"></i> Subtitles
+            </button>
+            <button class="nav-tab" data-tab="torrents">
+                <i class="fas fa-download"></i> Torrents
+            </button>
+            <button class="nav-tab" data-tab="health">
+                <i class="fas fa-heartbeat"></i> Health Monitor
+            </button>
+            <button class="nav-tab" data-tab="settings">
+                <i class="fas fa-cog"></i> Settings
+            </button>
+        </nav>
+
+        <!-- Main Content -->
+        <main class="main-content">
+            <!-- Dashboard Tab -->
+            <div class="tab-content active" id="dashboard">
+                <div class="dashboard-grid">
+                    <!-- Quick Stats -->
+                    <div class="card stats-card">
+                        <h3><i class="fas fa-chart-line"></i> Quick Stats</h3>
+                        <div class="stats-grid">
+                            <div class="stat-item">
+                                <span class="stat-value" id="subtitles-processed">0</span>
+                                <span class="stat-label">Subtitles Processed</span>
+                            </div>
+                            <div class="stat-item">
+                                <span class="stat-value" id="torrents-found">0</span>
+                                <span class="stat-label">Torrents Found</span>
+                            </div>
+                            <div class="stat-item">
+                                <span class="stat-value" id="active-providers">0</span>
+                                <span class="stat-label">Active Providers</span>
+                            </div>
+                            <div class="stat-item">
+                                <span class="stat-value" id="uptime">0h 0m</span>
+                                <span class="stat-label">Uptime</span>
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- System Status -->
+                    <div class="card system-status-card">
+                        <h3><i class="fas fa-server"></i> System Status</h3>
+                        <div class="status-list">
+                            <div class="status-item" id="subtitle-service-status">
+                                <div class="status-icon">
+                                    <i class="fas fa-circle status-unknown"></i>
+                                </div>
+                                <span class="status-text">Subtitle Service</span>
+                                <span class="status-value">Checking...</span>
+                            </div>
+                            <div class="status-item" id="realdebrid-service-status">
+                                <div class="status-icon">
+                                    <i class="fas fa-circle status-unknown"></i>
+                                </div>
+                                <span class="status-text">Real-Debrid Service</span>
+                                <span class="status-value">Checking...</span>
+                            </div>
+                            <div class="status-item" id="torrent-providers-status">
+                                <div class="status-icon">
+                                    <i class="fas fa-circle status-unknown"></i>
+                                </div>
+                                <span class="status-text">Torrent Providers</span>
+                                <span class="status-value">Checking...</span>
+                            </div>
+                            <div class="status-item" id="api-keys-status">
+                                <div class="status-icon">
+                                    <i class="fas fa-circle status-unknown"></i>
+                                </div>
+                                <span class="status-text">API Keys</span>
+                                <span class="status-value">Checking...</span>
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- Recent Activity -->
+                    <div class="card activity-card">
+                        <h3><i class="fas fa-clock"></i> Recent Activity</h3>
+                        <div class="activity-list" id="activity-list">
+                            <div class="activity-item">
+                                <div class="activity-time">Just now</div>
+                                <div class="activity-text">System initialized</div>
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- Performance Metrics -->
+                    <div class="card performance-card">
+                        <h3><i class="fas fa-chart-area"></i> Performance</h3>
+                        <div class="metric-item">
+                            <span class="metric-label">Average Response Time</span>
+                            <div class="metric-bar">
+                                <div class="metric-fill" style="width: 0%" id="response-time-bar"></div>
+                            </div>
+                            <span class="metric-value" id="response-time-value">-- ms</span>
+                        </div>
+                        <div class="metric-item">
+                            <span class="metric-label">Memory Usage</span>
+                            <div class="metric-bar">
+                                <div class="metric-fill" style="width: 0%" id="memory-usage-bar"></div>
+                            </div>
+                            <span class="metric-value" id="memory-usage-value">-- MB</span>
+                        </div>
+                        <div class="metric-item">
+                            <span class="metric-label">Success Rate</span>
+                            <div class="metric-bar">
+                                <div class="metric-fill" style="width: 0%" id="success-rate-bar"></div>
+                            </div>
+                            <span class="metric-value" id="success-rate-value">--%</span>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Subtitles Tab -->
+            <div class="tab-content" id="subtitles">
+                <div class="subtitles-grid">
+                    <!-- Subtitle Sources -->
+                    <div class="card sources-card">
+                        <h3><i class="fas fa-database"></i> Subtitle Sources</h3>
+                        <div class="sources-list" id="subtitle-sources">
+                            <!-- Will be populated by JavaScript -->
+                        </div>
+                    </div>
+
+                    <!-- Language Settings -->
+                    <div class="card language-card">
+                        <h3><i class="fas fa-language"></i> Language Settings</h3>
+                        <div class="language-settings">
+                            <div class="setting-item">
+                                <label for="primary-language">Primary Language</label>
+                                <select id="primary-language" class="form-select">
+                                    <option value="en">English</option>
+                                    <option value="tr">Turkish</option>
+                                    <option value="es">Spanish</option>
+                                    <option value="fr">French</option>
+                                    <option value="de">German</option>
+                                    <option value="it">Italian</option>
+                                    <option value="pt">Portuguese</option>
+                                    <option value="ru">Russian</option>
+                                </select>
+                            </div>
+                            <div class="setting-item">
+                                <label for="fallback-language">Fallback Language</label>
+                                <select id="fallback-language" class="form-select">
+                                    <option value="en">English</option>
+                                    <option value="tr">Turkish</option>
+                                    <option value="es">Spanish</option>
+                                    <option value="fr">French</option>
+                                    <option value="de">German</option>
+                                    <option value="it">Italian</option>
+                                    <option value="pt">Portuguese</option>
+                                    <option value="ru">Russian</option>
+                                </select>
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- AI Correction Settings -->
+                    <div class="card ai-card">
+                        <h3><i class="fas fa-brain"></i> AI Correction</h3>
+                        <div class="ai-settings">
+                            <div class="setting-item">
+                                <label class="toggle-label">
+                                    <input type="checkbox" id="ai-enabled" class="toggle-input" checked>
+                                    <span class="toggle-slider"></span>
+                                    Enable AI Correction
+                                </label>
+                            </div>
+                            <div class="setting-item">
+                                <label for="ai-model">AI Model</label>
+                                <select id="ai-model" class="form-select">
+                                    <option value="gemini">Google Gemini</option>
+                                    <option value="openai">OpenAI GPT</option>
+                                    <option value="claude">Anthropic Claude</option>
+                                </select>
+                            </div>
+                            <div class="setting-item">
+                                <label for="correction-intensity">Correction Intensity</label>
+                                <input type="range" id="correction-intensity" min="1" max="10" value="5" class="form-range">
+                                <span class="range-value">5</span>
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- Subtitle Test -->
+                    <div class="card test-card">
+                        <h3><i class="fas fa-flask"></i> Test Subtitle Search</h3>
+                        <div class="test-form">
+                            <div class="form-group">
+                                <label for="test-imdb">IMDb ID</label>
+                                <input type="text" id="test-imdb" class="form-input" placeholder="tt0468569">
+                            </div>
+                            <div class="form-group">
+                                <label for="test-language">Language</label>
+                                <select id="test-language" class="form-select">
+                                    <option value="en">English</option>
+                                    <option value="tr">Turkish</option>
+                                </select>
+                            </div>
+                            <button class="btn btn-primary" onclick="testSubtitleSearch()">
+                                <i class="fas fa-search"></i> Test Search
+                            </button>
+                        </div>
+                        <div class="test-results" id="subtitle-test-results"></div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Torrents Tab -->
+            <div class="tab-content" id="torrents">
+                <div class="torrents-grid">
+                    <!-- Real-Debrid Status -->
+                    <div class="card realdebrid-card">
+                        <h3><i class="fas fa-cloud-download-alt"></i> Real-Debrid Status</h3>
+                        <div class="realdebrid-status" id="realdebrid-status">
+                            <div class="status-item">
+                                <span class="status-label">API Status</span>
+                                <span class="status-value" id="rd-api-status">Checking...</span>
+                            </div>
+                            <div class="status-item">
+                                <span class="status-label">Account Type</span>
+                                <span class="status-value" id="rd-account-type">--</span>
+                            </div>
+                            <div class="status-item">
+                                <span class="status-label">Expiration</span>
+                                <span class="status-value" id="rd-expiration">--</span>
+                            </div>
+                            <div class="status-item">
+                                <span class="status-label">Traffic Left</span>
+                                <span class="status-value" id="rd-traffic">--</span>
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- Torrent Providers -->
+                    <div class="card providers-card">
+                        <h3><i class="fas fa-network-wired"></i> Torrent Providers</h3>
+                        <div class="providers-list" id="torrent-providers">
+                            <!-- Will be populated by JavaScript -->
+                        </div>
+                    </div>
+
+                    <!-- Torrent Test -->
+                    <div class="card torrent-test-card">
+                        <h3><i class="fas fa-vial"></i> Test Torrent Search</h3>
+                        <div class="test-form">
+                            <div class="form-group">
+                                <label for="torrent-test-imdb">IMDb ID</label>
+                                <input type="text" id="torrent-test-imdb" class="form-input" placeholder="tt0468569">
+                            </div>
+                            <div class="form-group">
+                                <label for="torrent-test-quality">Quality Filter</label>
+                                <select id="torrent-test-quality" class="form-select">
+                                    <option value="">All Qualities</option>
+                                    <option value="4K">4K / 2160p</option>
+                                    <option value="1080p">1080p</option>
+                                    <option value="720p">720p</option>
+                                    <option value="480p">480p</option>
+                                </select>
+                            </div>
+                            <button class="btn btn-primary" onclick="testTorrentSearch()">
+                                <i class="fas fa-search"></i> Test Search
+                            </button>
+                        </div>
+                        <div class="test-results" id="torrent-test-results"></div>
+                    </div>
+
+                    <!-- Cache Statistics -->
+                    <div class="card cache-card">
+                        <h3><i class="fas fa-database"></i> Cache Statistics</h3>
+                        <div class="cache-stats" id="cache-stats">
+                            <div class="stat-item">
+                                <span class="stat-label">Cached Torrents</span>
+                                <span class="stat-value" id="cached-torrents">0</span>
+                            </div>
+                            <div class="stat-item">
+                                <span class="stat-label">Cache Hit Rate</span>
+                                <span class="stat-value" id="cache-hit-rate">0%</span>
+                            </div>
+                            <div class="stat-item">
+                                <span class="stat-label">Cache Size</span>
+                                <span class="stat-value" id="cache-size">0 MB</span>
+                            </div>
+                        </div>
+                        <button class="btn btn-secondary" onclick="clearCache()">
+                            <i class="fas fa-trash"></i> Clear Cache
+                        </button>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Health Monitor Tab -->
+            <div class="tab-content" id="health">
+                <div class="health-grid">
+                    <!-- System Health -->
+                    <div class="card health-overview-card">
+                        <h3><i class="fas fa-heartbeat"></i> System Health Overview</h3>
+                        <div class="health-score">
+                            <div class="score-circle" id="health-score-circle">
+                                <div class="score-value" id="health-score">--</div>
+                                <div class="score-label">Health Score</div>
+                            </div>
+                            <div class="score-details">
+                                <div class="detail-item">
+                                    <span class="detail-label">APIs</span>
+                                    <span class="detail-value" id="apis-health">--</span>
+                                </div>
+                                <div class="detail-item">
+                                    <span class="detail-label">Services</span>
+                                    <span class="detail-value" id="services-health">--</span>
+                                </div>
+                                <div class="detail-item">
+                                    <span class="detail-label">Providers</span>
+                                    <span class="detail-value" id="providers-health">--</span>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- Detailed Health Checks -->
+                    <div class="card health-checks-card">
+                        <h3><i class="fas fa-stethoscope"></i> Detailed Health Checks</h3>
+                        <div class="health-checks" id="health-checks">
+                            <!-- Will be populated by JavaScript -->
+                        </div>
+                    </div>
+
+                    <!-- Performance Monitoring -->
+                    <div class="card performance-monitor-card">
+                        <h3><i class="fas fa-chart-line"></i> Performance Monitoring</h3>
+                        <div class="performance-charts">
+                            <div class="chart-container">
+                                <canvas id="response-time-chart"></canvas>
+                            </div>
+                            <div class="chart-container">
+                                <canvas id="success-rate-chart"></canvas>
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- Error Logs -->
+                    <div class="card error-logs-card">
+                        <h3><i class="fas fa-exclamation-triangle"></i> Error Logs</h3>
+                        <div class="error-controls">
+                            <button class="btn btn-secondary" onclick="clearErrorLogs()">
+                                <i class="fas fa-trash"></i> Clear Logs
+                            </button>
+                            <button class="btn btn-secondary" onclick="exportErrorLogs()">
+                                <i class="fas fa-download"></i> Export Logs
+                            </button>
+                        </div>
+                        <div class="error-logs" id="error-logs">
+                            <div class="log-item">
+                                <span class="log-time">System started</span>
+                                <span class="log-message">No errors detected</span>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Settings Tab -->
+            <div class="tab-content" id="settings">
+                <div class="settings-grid">
+                    <!-- API Configuration -->
+                    <div class="card api-config-card">
+                        <h3><i class="fas fa-key"></i> API Configuration</h3>
+                        <div class="api-settings">
+                            <div class="setting-group">
+                                <label for="gemini-api-key">Google Gemini API Key</label>
+                                <div class="input-group">
+                                    <input type="password" id="gemini-api-key" class="form-input" placeholder="Enter API key">
+                                    <button class="btn btn-secondary" onclick="toggleVisibility('gemini-api-key')">
+                                        <i class="fas fa-eye"></i>
+                                    </button>
+                                </div>
+                            </div>
+                            <div class="setting-group">
+                                <label for="opensubtitles-api-key">OpenSubtitles API Key</label>
+                                <div class="input-group">
+                                    <input type="password" id="opensubtitles-api-key" class="form-input" placeholder="Enter API key">
+                                    <button class="btn btn-secondary" onclick="toggleVisibility('opensubtitles-api-key')">
+                                        <i class="fas fa-eye"></i>
+                                    </button>
+                                </div>
+                            </div>
+                            <div class="setting-group">
+                                <label for="tmdb-api-key">TMDB API Key</label>
+                                <div class="input-group">
+                                    <input type="password" id="tmdb-api-key" class="form-input" placeholder="Enter API key">
+                                    <button class="btn btn-secondary" onclick="toggleVisibility('tmdb-api-key')">
+                                        <i class="fas fa-eye"></i>
+                                    </button>
+                                </div>
+                            </div>
+                            <div class="setting-group">
+                                <label for="subdl-api-key">SubDL API Key</label>
+                                <div class="input-group">
+                                    <input type="password" id="subdl-api-key" class="form-input" placeholder="Enter API key">
+                                    <button class="btn btn-secondary" onclick="toggleVisibility('subdl-api-key')">
+                                        <i class="fas fa-eye"></i>
+                                    </button>
+                                </div>
+                            </div>
+                            <div class="setting-group">
+                                <label for="realdebrid-api-key">Real-Debrid API Key</label>
+                                <div class="input-group">
+                                    <input type="password" id="realdebrid-api-key" class="form-input" placeholder="Enter API key">
+                                    <button class="btn btn-secondary" onclick="toggleVisibility('realdebrid-api-key')">
+                                        <i class="fas fa-eye"></i>
+                                    </button>
+                                </div>
+                            </div>
+                            <div class="setting-group">
+                                <label for="jackett-url">Jackett URL</label>
+                                <input type="text" id="jackett-url" class="form-input" placeholder="http://localhost:9117">
+                            </div>
+                            <div class="setting-group">
+                                <label for="jackett-api-key">Jackett API Key</label>
+                                <div class="input-group">
+                                    <input type="password" id="jackett-api-key" class="form-input" placeholder="Enter API key">
+                                    <button class="btn btn-secondary" onclick="toggleVisibility('jackett-api-key')">
+                                        <i class="fas fa-eye"></i>
+                                    </button>
+                                </div>
+                            </div>
+                        </div>
+                        <div class="settings-actions">
+                            <button class="btn btn-primary" onclick="saveSettings()">
+                                <i class="fas fa-save"></i> Save Settings
+                            </button>
+                            <button class="btn btn-secondary" onclick="testApiKeys()">
+                                <i class="fas fa-vial"></i> Test API Keys
+                            </button>
+                        </div>
+                    </div>
+
+                    <!-- Advanced Settings -->
+                    <div class="card advanced-settings-card">
+                        <h3><i class="fas fa-cogs"></i> Advanced Settings</h3>
+                        <div class="advanced-settings">
+                            <div class="setting-item">
+                                <label class="toggle-label">
+                                    <input type="checkbox" id="debug-mode" class="toggle-input">
+                                    <span class="toggle-slider"></span>
+                                    Debug Mode
+                                </label>
+                            </div>
+                            <div class="setting-item">
+                                <label class="toggle-label">
+                                    <input type="checkbox" id="scraping-enabled" class="toggle-input" checked>
+                                    <span class="toggle-slider"></span>
+                                    Enable Web Scraping
+                                </label>
+                            </div>
+                            <div class="setting-item">
+                                <label class="toggle-label">
+                                    <input type="checkbox" id="cache-enabled" class="toggle-input" checked>
+                                    <span class="toggle-slider"></span>
+                                    Enable Caching
+                                </label>
+                            </div>
+                            <div class="setting-item">
+                                <label for="max-concurrent-requests">Max Concurrent Requests</label>
+                                <input type="number" id="max-concurrent-requests" class="form-input" value="5" min="1" max="20">
+                            </div>
+                            <div class="setting-item">
+                                <label for="request-timeout">Request Timeout (seconds)</label>
+                                <input type="number" id="request-timeout" class="form-input" value="10" min="5" max="60">
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- Backup & Restore -->
+                    <div class="card backup-card">
+                        <h3><i class="fas fa-database"></i> Backup & Restore</h3>
+                        <div class="backup-settings">
+                            <div class="backup-actions">
+                                <button class="btn btn-secondary" onclick="exportConfig()">
+                                    <i class="fas fa-download"></i> Export Configuration
+                                </button>
+                                <button class="btn btn-secondary" onclick="importConfig()">
+                                    <i class="fas fa-upload"></i> Import Configuration
+                                </button>
+                                <input type="file" id="config-file" accept=".json" style="display: none;">
+                            </div>
+                            <div class="backup-info">
+                                <p>Export your settings to backup or transfer to another instance.</p>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </main>
+
+        <!-- Footer -->
+        <footer class="footer">
+            <div class="footer-content">
+                <div class="footer-section">
+                    <p>&copy; 2025 Stremio AI Subtitle & Real-Debrid Addon</p>
+                </div>
+                <div class="footer-section">
+                    <a href="https://github.com/4Liberty/vlsub-opensubtitles-com" target="_blank">
+                        <i class="fab fa-github"></i> GitHub
+                    </a>
+                </div>
+            </div>
+        </footer>
+    </div>
+
+    <!-- Scripts -->
+    <script src="script.js"></script>
+</body>
+</html>

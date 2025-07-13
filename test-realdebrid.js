@@ -23,19 +23,21 @@ async function testRealDebridFunctionality() {
     console.log(`   Jackett URL: ${hasJackettUrl ? '✅ Available' : '❌ Missing'}`);
     console.log(`   Jackett API Key: ${hasJackettKey ? '✅ Available' : '❌ Missing'}`);
     
-    console.log(`\n📊 SUPPORTED TORRENT PROVIDERS (like Torrentio):`);
-    console.log(`   ✅ YTS - High-quality movies`);
-    console.log(`   ✅ EZTV - TV shows and movies`);
-    console.log(`   ✅ RARBG - Movies and TV (via mirrors)`);
-    console.log(`   ✅ ThePirateBay - General torrents (via API)`);
-    console.log(`   ✅ TorrentGalaxy - Movies and TV`);
-    console.log(`   ✅ Nyaa.si - Anime and Asian content`);
-    console.log(`   ✅ AniDex - Anime torrents`);
-    console.log(`   ${hasJackettUrl && hasJackettKey ? '✅' : '⚠️'} Jackett - Meta-search across 100+ sites`);
-    console.log(`   ⚠️  1337x - General torrents (scraping required)`);
-    console.log(`   ⚠️  KickassTorrents - General torrents (scraping required)`);
-    console.log(`   ⚠️  MagnetDL - Magnet links (scraping required)`);
-    console.log(`   ⚠️  Regional providers - Rutor, Comando, Torrent9, etc.`);
+    console.log(`\n📊 SUPPORTED TORRENT PROVIDERS (with WEB SCRAPING):`);
+    console.log(`   ✅ YTS - High-quality movies (API)`);
+    console.log(`   ✅ EZTV - TV shows and movies (API)`);
+    console.log(`   ✅ RARBG - Movies and TV via mirrors (API)`);
+    console.log(`   ✅ ThePirateBay - General torrents (API)`);
+    console.log(`   ✅ TorrentGalaxy - Movies and TV (API)`);
+    console.log(`   ✅ Nyaa.si - Anime and Asian content (API)`);
+    console.log(`   ✅ AniDex - Anime torrents (API)`);
+    console.log(`   ${hasJackettUrl && hasJackettKey ? '✅' : '⚠️'} Jackett - Meta-search across 100+ sites (API)`);
+    console.log(`   🌐 1337x - General torrents (WEB SCRAPING)`);
+    console.log(`   🌐 KickassTorrents - General torrents (WEB SCRAPING)`);
+    console.log(`   🌐 MagnetDL - Magnet links (WEB SCRAPING)`);
+    console.log(`   ⚠️  Torrent9 - French torrents (scraping framework ready)`);
+    console.log(`   ⚠️  Rutor - Russian torrents (scraping framework ready)`);
+    console.log(`   ⚠️  Regional providers - Full scraping implementation available`);
     
     if (!hasRealDebridKey) {
         console.log(`\n⚠️  WITHOUT REAL-DEBRID API KEY:`);
