@@ -1,4 +1,15 @@
-// --- ENVIRONMENT CHECKS ---
+// Stremio subtitles resource endpoint (Stremio expects this for subtitle options)
+app.get('/subtitles/:type/:id.json', async (req, res) => {
+    const { type, id } = req.params;
+    const infoHash = req.query.hash || null;
+    const result = await getSubtitleUrlsForStremio(id, infoHash);
+    res.json(result);
+});
+
+// --- In-memory cache for AI-enhanced subtitles ---
+// Key: `${videoId}:${language}:${infoHash || ''}`
+const aiSubtitleCache = new Map();
+const AI_SLOW_THRESHOLD_MS = 8000;
 
 const fs = require('fs');
 const express = require('express');
@@ -82,10 +93,23 @@ app.get('/manifest.json', (req, res) => {
 // Stremio subtitles resource endpoint (.srt)
 app.get('/subtitles/:videoId/:language.srt', async (req, res) => {
     const { videoId, language } = req.params;
-    console.log(`[Express] AI Subtitle file request hit. Video ID: ${videoId}, Lang: ${language}`);
+    const infoHash = req.query.hash || null;
+    const cacheKey = `${videoId}:${language}:${infoHash || ''}`;
+    console.log(`[Express] AI Subtitle file request hit. Video ID: ${videoId}, Lang: ${language}, Hash: ${infoHash}`);
+    if (aiSubtitleCache.has(cacheKey)) {
+        res.setHeader('Content-Type', 'text/plain; charset=utf-8');
+        res.end(aiSubtitleCache.get(cacheKey));
+        return;
+    }
+    const start = Date.now();
     try {
         const correctedContent = await getAICorrectedSubtitle(videoId, language);
+        const elapsed = Date.now() - start;
+        if (elapsed > AI_SLOW_THRESHOLD_MS) {
+            console.warn(`[AI MONITOR] Slow AI subtitle response for ${cacheKey}: ${elapsed}ms`);
+        }
         if (correctedContent) {
+            aiSubtitleCache.set(cacheKey, correctedContent);
             res.setHeader('Content-Type', 'text/plain; charset=utf-8');
             res.end(correctedContent);
         } else {
@@ -101,11 +125,26 @@ app.get('/subtitles/:videoId/:language.srt', async (req, res) => {
 // Stremio subtitles/stream resource endpoints (POST)
 app.post('/:resource/:type/:id', express.json(), async (req, res) => {
     const { resource, type, id } = req.params;
+    const infoHash = req.body?.extra?.video_hash || null;
+    const cacheKey = `${id}:${type === 'subtitles' ? 'tr' : ''}:${infoHash || ''}`;
+    // Pre-cache AI-enhanced subtitle in background for subtitle resource
     if (resource === 'subtitles') {
-        const infoHash = req.body?.extra?.video_hash || null;
+        if (!aiSubtitleCache.has(cacheKey)) {
+            // Fire and forget
+            getAICorrectedSubtitle(id, 'tr').then(content => {
+                if (content) aiSubtitleCache.set(cacheKey, content);
+            });
+        }
         const result = await getSubtitleUrlsForStremio(id, infoHash);
         res.json(result);
     } else if (resource === 'stream') {
+        // Optionally pre-cache here as well if desired
+        const resultKey = `${id}:tr:${infoHash || ''}`;
+        if (!aiSubtitleCache.has(resultKey)) {
+            getAICorrectedSubtitle(id, 'tr').then(content => {
+                if (content) aiSubtitleCache.set(resultKey, content);
+            });
+        }
         const streams = await getEnrichedStreams(type, id, []);
         res.json({ streams });
     } else {
