@@ -1,7 +1,14 @@
+builder.defineSubtitlesHandler(async (args) => {
+builder.defineStreamHandler(async (args) => {
+builder.defineSubtitlesHandler(async (args) => {
+builder.defineStreamHandler(async (args) => {
 // --- ENVIRONMENT CHECKS ---
 const express = require('express');
 const { addonBuilder, serveHTTP } = require('stremio-addon-sdk');
 const path = require('path');
+const { getAICorrectedSubtitle, getSubtitleUrlsForStremio } = require('./lib/subtitleMatcher');
+const fetch = require('node-fetch');
+const { getEnrichedStreams } = require('./lib/streamEnricher');
 
 function checkEnvVars() {
     const missing = [];
@@ -16,26 +23,19 @@ function checkEnvVars() {
     }
 }
 
-// server.js
-// --- FINAL STABLE VERSION v2.9.0 ---
-
-const { getAICorrectedSubtitle, getSubtitleUrlsForStremio } = require('./lib/subtitleMatcher');
-const fetch = require('node-fetch');
-const { getEnrichedStreams } = require('./lib/streamEnricher');
-
 console.log("Starting Stremio AI Subtitle Addon v2.9.0...");
 
 const manifest = {
-    "id": "com.stremio.ai.subtitle.corrector.tr.final",
-    "version": "2.9.0",
-    "name": "AI Subtitle Corrector (TR)",
-    "description": "Provides AI-corrected Turkish subtitles with a full customization UI and hash-matching.",
-    "resources": ["subtitles", "stream"],
-    "types": ["movie", "series"],
-    "idPrefixes": ["tt", "tmdb"],
-    "catalogs": [],
-    "behaviorHints": {
-        "configurable": true
+    id: 'com.stremio.ai.subtitle.corrector.tr.final',
+    version: '2.9.0',
+    name: 'AI Subtitle Corrector (TR)',
+    description: 'Provides AI-corrected Turkish subtitles with a full customization UI and hash-matching.',
+    resources: ['subtitles', 'stream'],
+    types: ['movie', 'series'],
+    idPrefixes: ['tt', 'tmdb'],
+    catalogs: [],
+    behaviorHints: {
+        configurable: true
     }
 };
 
@@ -51,20 +51,19 @@ builder.defineSubtitlesHandler(async (args) => {
         }
         return result;
     } catch (error) {
-        console.error("[Handler] Error in subtitle handler:", error);
+        console.error('[Handler] Error in subtitle handler:', error);
         return { subtitles: [] };
     }
 });
 
 builder.defineStreamHandler(async (args) => {
     console.log(`[Handler] Stream request received for: ${args.id}`);
-    // You would fetch streams from your provider here. For demo, use an empty array.
-    const streams = []; // Replace with actual stream fetching logic if needed.
+    const streams = [];
     try {
         const enriched = await getEnrichedStreams(args.type, args.id, streams);
         return { streams: enriched };
     } catch (error) {
-        console.error("[Handler] Error in stream handler:", error);
+        console.error('[Handler] Error in stream handler:', error);
         return { streams: [] };
     }
 });
@@ -78,15 +77,10 @@ checkEnvVars();
 // Health check endpoint for diagnostics
 app.get('/health', async (req, res) => {
     const checks = {};
-    // Check Gemini
     checks.gemini = !!process.env.GEMINI_API_KEY;
-    // Check OpenSubtitles
     checks.opensubtitles = !!process.env.OPENSUBTITLES_API_KEY;
-    // Check TMDb
     checks.tmdb = !!process.env.TMDB_API_KEY;
-    // Check SubDL
     checks.subdl = !!process.env.SUBDL_API_KEY;
-    // Try a simple fetch to TMDb if key present
     if (checks.tmdb) {
         try {
             const tmdbRes = await fetch(`https://api.themoviedb.org/3/configuration?api_key=${process.env.TMDB_API_KEY}`);
@@ -130,7 +124,6 @@ function asyncRoute(handler) {
 app.get('/subtitles/:videoId/:language.srt', asyncRoute(async (req, res) => {
     const { videoId, language } = req.params;
     console.log(`[Endpoint] AI Subtitle file request hit. Video ID: ${videoId}, Lang: ${language}`);
-    // Use robustFetch only in subtitleMatcher, do not patch global.fetch
     const correctedContent = await getAICorrectedSubtitle(videoId, language);
     if (correctedContent) {
         res.setHeader('Content-Type', 'text/plain; charset=utf-8');
@@ -141,9 +134,7 @@ app.get('/subtitles/:videoId/:language.srt', asyncRoute(async (req, res) => {
     }
 }));
 
-
 // All other requests are handled by the Stremio addon SDK.
-// This will handle /manifest.json, /subtitles, and /stream requests.
 app.use((req, res, next) => {
     try {
         serveHTTP(addonInterface)(req, res, next);
