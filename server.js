@@ -70,8 +70,7 @@ const addonInterface = builder.getInterface();
 
 // --- Stremio Addon SDK HTTP server (for Stremio endpoints and .srt endpoint) ---
 const fs = require('fs');
-const express = require('express');
-const app = express();
+// 'express' and 'app' are already declared above, do not redeclare.
 const port = process.env.PORT || 7000;
 
 // Stremio Addon manifest endpoint
