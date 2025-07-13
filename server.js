@@ -119,26 +119,27 @@ async function robustFetch(url, options = {}, retries = 2, timeoutMs = 8000) {
     return null;
 }
 
+// Async route wrapper to catch errors and pass to Express error handler
+function asyncRoute(handler) {
+    return (req, res, next) => {
+        Promise.resolve(handler(req, res, next)).catch(next);
+    };
+}
+
 // Route for serving the actual .srt files.
-app.get('/subtitles/:videoId/:language.srt', async (req, res) => {
+app.get('/subtitles/:videoId/:language.srt', asyncRoute(async (req, res) => {
     const { videoId, language } = req.params;
     console.log(`[Endpoint] AI Subtitle file request hit. Video ID: ${videoId}, Lang: ${language}`);
-    try {
-        // Patch global fetch for robust external calls in subtitleMatcher
-        global.fetch = robustFetch;
-        const correctedContent = await getAICorrectedSubtitle(videoId, language);
-        if (correctedContent) {
-            res.setHeader('Content-Type', 'text/plain; charset=utf-8');
-            res.send(correctedContent);
-        } else {
-            console.error(`[Endpoint] Subtitle generation failed for ${videoId}`);
-            res.status(404).send('Subtitle could not be generated.');
-        }
-    } catch (err) {
-        console.error("[Endpoint] CRITICAL ERROR while getting AI subtitle:", err);
-        res.status(500).send('Internal server error.');
+    // Use robustFetch only in subtitleMatcher, do not patch global.fetch
+    const correctedContent = await getAICorrectedSubtitle(videoId, language);
+    if (correctedContent) {
+        res.setHeader('Content-Type', 'text/plain; charset=utf-8');
+        res.send(correctedContent);
+    } else {
+        console.error(`[Endpoint] Subtitle generation failed for ${videoId}`);
+        res.status(404).send('Subtitle could not be generated.');
     }
-});
+}));
 
 
 // All other requests are handled by the Stremio addon SDK.
@@ -147,8 +148,15 @@ app.use((req, res, next) => {
     try {
         serveHTTP(addonInterface)(req, res, next);
     } catch (e) {
-        console.error('[Stremio SDK] Handler error:', e);
-        res.status(500).send('Stremio handler error.');
+        next(e);
+    }
+});
+
+// Global error handler for uncaught errors in async routes
+app.use((err, req, res, next) => {
+    console.error('[Global Error Handler]', err);
+    if (!res.headersSent) {
+        res.status(500).send('Internal server error.');
     }
 });
 
