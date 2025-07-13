@@ -223,4 +223,4 @@ app.listen(port, () => {
     console.log(`Health: http://0.0.0.0:${port}/health`);
     console.log(`Configure: http://0.0.0.0:${port}/configure`);
     console.log(`Subtitle .srt: http://0.0.0.0:${port}/subtitles/:videoId/:language.srt`);
-});
+}); 
