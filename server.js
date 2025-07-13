@@ -39,6 +39,7 @@ const express = require('express');
 const { addonBuilder, serveHTTP } = require('stremio-addon-sdk');
 const path = require('path');
 const { getAICorrectedSubtitle, getSubtitleUrlsForStremio } = require('./lib/subtitleMatcher');
+const fetch = require('node-fetch');
 const { getEnrichedStreams } = require('./lib/streamEnricher');
 
 console.log("Starting Stremio AI Subtitle Addon v2.9.0...");
@@ -98,31 +99,54 @@ const configureRoute = (req, res) => {
 app.get('/', configureRoute);
 app.get('/configure', configureRoute);
 
+// Helper: robust fetch with retries and timeout
+async function robustFetch(url, options = {}, retries = 2, timeoutMs = 8000) {
+    for (let i = 0; i <= retries; i++) {
+        try {
+            const controller = new AbortController();
+            const timeout = setTimeout(() => controller.abort(), timeoutMs);
+            const res = await fetch(url, { ...options, signal: controller.signal });
+            clearTimeout(timeout);
+            if (res.ok) return res;
+        } catch (e) {
+            if (i === retries) return null;
+        }
+    }
+    return null;
+}
+
 // Route for serving the actual .srt files.
-app.get('/subtitles/:videoId/:language.srt', (req, res) => {
+app.get('/subtitles/:videoId/:language.srt', async (req, res) => {
     const { videoId, language } = req.params;
     console.log(`[Endpoint] AI Subtitle file request hit. Video ID: ${videoId}, Lang: ${language}`);
-
-    getAICorrectedSubtitle(videoId, language)
-        .then(correctedContent => {
-            if (correctedContent) {
-                res.setHeader('Content-Type', 'text/plain; charset=utf-8');
-                res.send(correctedContent);
-            } else {
-                console.error(`[Endpoint] Subtitle generation failed for ${videoId}`);
-                res.status(404).send('Subtitle could not be generated.');
-            }
-        })
-        .catch(err => {
-            console.error("[Endpoint] CRITICAL ERROR while getting AI subtitle:", err);
-            res.status(500).send('Internal server error.');
-        });
+    try {
+        // Patch global fetch for robust external calls in subtitleMatcher
+        global.fetch = robustFetch;
+        const correctedContent = await getAICorrectedSubtitle(videoId, language);
+        if (correctedContent) {
+            res.setHeader('Content-Type', 'text/plain; charset=utf-8');
+            res.send(correctedContent);
+        } else {
+            console.error(`[Endpoint] Subtitle generation failed for ${videoId}`);
+            res.status(404).send('Subtitle could not be generated.');
+        }
+    } catch (err) {
+        console.error("[Endpoint] CRITICAL ERROR while getting AI subtitle:", err);
+        res.status(500).send('Internal server error.');
+    }
 });
 
 
 // All other requests are handled by the Stremio addon SDK.
 // This will handle /manifest.json, /subtitles, and /stream requests.
-app.use(serveHTTP(addonInterface));
+app.use((req, res, next) => {
+    try {
+        serveHTTP(addonInterface)(req, res, next);
+    } catch (e) {
+        console.error('[Stremio SDK] Handler error:', e);
+        res.status(500).send('Stremio handler error.');
+    }
+});
 
 app.listen(port, () => {
     console.log(`Addon running at: http://127.0.0.1:${port}`);
