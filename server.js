@@ -1,84 +1,23 @@
-// ...existing code...
+// server.js
+// --- FINAL STABLE VERSION v2.9.0 ---
 
-// --- In-memory cache for AI-enhanced subtitles ---
-// Key: `${videoId}:${language}:${infoHash || ''}`
-const aiSubtitleCache = new Map();
-const AI_SLOW_THRESHOLD_MS = 8000;
-
-const fs = require('fs');
 const express = require('express');
-
-
-const app = express();
-
-// Add CORS headers for all responses (required for Stremio addon installation)
-app.use((req, res, next) => {
-    res.setHeader('Access-Control-Allow-Origin', '*');
-    next();
-});
-
-// Serve static files from the project root (for logo.svg, logo.png, etc.)
-app.use(express.static(__dirname));
-
-// Helper to ensure absolute URLs in subtitle options
-function absolutizeSubtitleUrls(result, req) {
-    if (!result || !result.subtitles) return result;
-    const base = req.protocol + '://' + req.get('host');
-    result.subtitles = result.subtitles.map(sub => {
-        if (sub.url && sub.url.startsWith('/')) {
-            return { ...sub, url: base + sub.url };
-        }
-        return sub;
-    });
-    return result;
-}
-
-// Stremio subtitles resource endpoint (Stremio expects this for subtitle options)
-app.get('/subtitles/:type/:id.json', async (req, res) => {
-    const { type, id } = req.params;
-    const infoHash = req.query.hash || null;
-    let result = await getSubtitleUrlsForStremio(id, infoHash);
-    result = absolutizeSubtitleUrls(result, req);
-    res.json(result);
-});
-
-// Also support GET /subtitles/:type/:id for maximum compatibility
-app.get('/subtitles/:type/:id', async (req, res) => {
-    const { type, id } = req.params;
-    const infoHash = req.query.hash || null;
-    let result = await getSubtitleUrlsForStremio(id, infoHash);
-    result = absolutizeSubtitleUrls(result, req);
-    res.json(result);
-});
-const { addonBuilder } = require('stremio-addon-sdk');
+const { addonBuilder, serveHTTP } = require('stremio-addon-sdk');
 const path = require('path');
 const { getAICorrectedSubtitle, getSubtitleUrlsForStremio } = require('./lib/subtitleMatcher');
-const fetch = require('node-fetch');
 const { getEnrichedStreams } = require('./lib/streamEnricher');
-
-function checkEnvVars() {
-    const missing = [];
-    if (!process.env.GEMINI_API_KEY) missing.push('GEMINI_API_KEY');
-    if (!process.env.OPENSUBTITLES_API_KEY) missing.push('OPENSUBTITLES_API_KEY');
-    if (!process.env.TMDB_API_KEY) missing.push('TMDB_API_KEY');
-    if (!process.env.SUBDL_API_KEY) missing.push('SUBDL_API_KEY');
-    if (missing.length) {
-        console.warn('[Startup] WARNING: Missing environment variables:', missing.join(', '));
-    } else {
-        console.log('[Startup] All required API keys are set.');
-    }
-}
 
 console.log("Starting Stremio AI Subtitle Addon v2.9.0...");
 
+
 const manifest = {
-    id: 'com.stremio.ai.subtitle.corrector.tr.final',
-    version: '2.9.0',
-    name: 'AI Subtitle Corrector (TR)',
-    description: 'Provides AI-corrected Turkish subtitles with a full customization UI and hash-matching.',
-    resources: ['subtitles', 'stream'],
-    types: ['movie', 'series'],
-    idPrefixes: ['tt', 'tmdb'],
+    id: "com.stremio.ai.subtitle.corrector.tr.final",
+    version: "2.9.0",
+    name: "AI Subtitle Corrector (TR)",
+    description: "Provides AI-corrected Turkish subtitles with a full customization UI and hash-matching.",
+    resources: ["subtitles", "stream"],
+    types: ["movie", "series"],
+    idPrefixes: ["tt", "tmdb"],
     catalogs: [],
     behaviorHints: {
         configurable: true
@@ -97,151 +36,69 @@ builder.defineSubtitlesHandler(async (args) => {
         }
         return result;
     } catch (error) {
-        console.error('[Handler] Error in subtitle handler:', error);
+        console.error("[Handler] Error in subtitle handler:", error);
         return { subtitles: [] };
     }
 });
 
 builder.defineStreamHandler(async (args) => {
     console.log(`[Handler] Stream request received for: ${args.id}`);
-    const streams = [];
+    // You would fetch streams from your provider here. For demo, use an empty array.
+    const streams = []; // Replace with actual stream fetching logic if needed.
     try {
         const enriched = await getEnrichedStreams(args.type, args.id, streams);
         return { streams: enriched };
     } catch (error) {
-        console.error('[Handler] Error in stream handler:', error);
+        console.error("[Handler] Error in stream handler:", error);
         return { streams: [] };
     }
 });
 
-
 const addonInterface = builder.getInterface();
-
-// --- Stremio Addon SDK HTTP server (for Stremio endpoints and .srt endpoint) ---
+const app = express();
 const port = process.env.PORT || 7000;
 
-// Stremio Addon manifest endpoint
-app.get('/manifest.json', (req, res) => {
-    res.setHeader('Content-Type', 'application/json');
-    res.send(JSON.stringify(addonInterface.manifest));
-});
+// Route for the configuration page.
+const configureRoute = (req, res) => {
+    res.sendFile(path.join(__dirname, 'configure.html'));
+};
+app.get('/', configureRoute);
+app.get('/configure', configureRoute);
 
-// Stremio subtitles resource endpoint (.srt)
-app.get('/subtitles/:videoId/:language.srt', async (req, res) => {
+// Route for serving the actual .srt files.
+app.get('/subtitles/:videoId/:language.srt', (req, res) => {
     const { videoId, language } = req.params;
-    const infoHash = req.query.hash || null;
-    const cacheKey = `${videoId}:${language}:${infoHash || ''}`;
-    console.log(`[Express] AI Subtitle file request hit. Video ID: ${videoId}, Lang: ${language}, Hash: ${infoHash}`);
-    if (aiSubtitleCache.has(cacheKey)) {
-        res.setHeader('Content-Type', 'text/plain; charset=utf-8');
-        res.end(aiSubtitleCache.get(cacheKey));
-        return;
-    }
-    const start = Date.now();
-    try {
-        const correctedContent = await getAICorrectedSubtitle(videoId, language);
-        const elapsed = Date.now() - start;
-        if (elapsed > AI_SLOW_THRESHOLD_MS) {
-            console.warn(`[AI MONITOR] Slow AI subtitle response for ${cacheKey}: ${elapsed}ms`);
-        }
-        if (correctedContent) {
-            aiSubtitleCache.set(cacheKey, correctedContent);
-            res.setHeader('Content-Type', 'text/plain; charset=utf-8');
-            res.end(correctedContent);
-        } else {
-            console.error(`[Express] Subtitle generation failed for ${videoId}`);
-            res.status(404).end('Subtitle could not be generated.');
-        }
-    } catch (err) {
-        console.error('[Express] Error in .srt handler:', err);
-        res.status(500).end('Internal server error.');
-    }
-});
+    console.log(`[Endpoint] AI Subtitle file request hit. Video ID: ${videoId}, Lang: ${language}`);
 
-// Stremio subtitles/stream resource endpoints (POST)
-app.post('/:resource/:type/:id', express.json(), async (req, res) => {
-    const { resource, type, id } = req.params;
-    const infoHash = req.body?.extra?.video_hash || null;
-    const cacheKey = `${id}:${type === 'subtitles' ? 'tr' : ''}:${infoHash || ''}`;
-    // Pre-cache AI-enhanced subtitle in background for subtitle resource
-    if (resource === 'subtitles') {
-        if (!aiSubtitleCache.has(cacheKey)) {
-            // Fire and forget
-            getAICorrectedSubtitle(id, 'tr').then(content => {
-                if (content) aiSubtitleCache.set(cacheKey, content);
-            });
-        }
-        const result = await getSubtitleUrlsForStremio(id, infoHash);
-        res.json(result);
-    } else if (resource === 'stream') {
-        // Optionally pre-cache here as well if desired
-        const resultKey = `${id}:tr:${infoHash || ''}`;
-        if (!aiSubtitleCache.has(resultKey)) {
-            getAICorrectedSubtitle(id, 'tr').then(content => {
-                if (content) aiSubtitleCache.set(resultKey, content);
-            });
-        }
-        const streams = await getEnrichedStreams(type, id, []);
-        res.json({ streams });
-    } else {
-        res.status(404).json({ error: 'Unknown resource' });
-    }
-});
-
-// Configuration page
-app.get(['/', '/configure', '/configure/'], (req, res) => {
-    const filePath = path.join(__dirname, 'configure.html');
-    fs.readFile(filePath, (err, data) => {
-        if (err) {
-            res.status(500).end('Could not load configure.html');
-        } else {
-            res.setHeader('Content-Type', 'text/html; charset=utf-8');
-            res.end(data);
-        }
-    });
-});
-
-// Health check endpoint
-app.get(['/health', '/health/'], async (req, res) => {
-    const checks = {};
-    checks.gemini = !!process.env.GEMINI_API_KEY;
-    checks.opensubtitles = !!process.env.OPENSUBTITLES_API_KEY;
-    checks.tmdb = !!process.env.TMDB_API_KEY;
-    checks.subdl = !!process.env.SUBDL_API_KEY;
-    if (checks.tmdb) {
-        try {
-            const tmdbRes = await fetch(`https://api.themoviedb.org/3/configuration?api_key=${process.env.TMDB_API_KEY}`);
-            checks.tmdb_online = tmdbRes.ok;
-        } catch { checks.tmdb_online = false; }
-    }
-    res.json(checks);
+    getAICorrectedSubtitle(videoId, language)
+        .then(correctedContent => {
+            if (correctedContent) {
+                res.setHeader('Content-Type', 'text/plain; charset=utf-8');
+                res.send(correctedContent);
+            } else {
+                console.error(`[Endpoint] Subtitle generation failed for ${videoId}`);
+                res.status(404).send('Subtitle could not be generated.');
+            }
+        })
+        .catch(err => {
+            console.error("[Endpoint] CRITICAL ERROR while getting AI subtitle:", err);
+            res.status(500).send('Internal server error.');
+        });
 });
 
 
-// Catch-all 404 JSON error for unknown API routes
+
+// Add CORS headers for all responses (required for Stremio addon installation)
 app.use((req, res, next) => {
-    if (req.path.startsWith('/subtitles') || req.path.startsWith('/manifest') || req.path.startsWith('/stream')) {
-        res.status(404).json({ error: 'Not found' });
-    } else {
-        next();
-    }
+    res.setHeader('Access-Control-Allow-Origin', '*');
+    next();
 });
 
-// Global error handler
-app.use((err, req, res, next) => {
-    console.error('[Global Error Handler]', err);
-    if (!res.headersSent) {
-        res.status(500).json({ error: 'Internal server error.' });
-    }
-});
+// All other requests are handled by the Stremio addon SDK.
+// This will handle /manifest.json, /subtitles, and /stream requests.
+app.use(serveHTTP(addonInterface));
 
 app.listen(port, () => {
-    console.log(`Stremio Addon & all endpoints running at: http://0.0.0.0:${port}`);
-    console.log(`Manifest: http://0.0.0.0:${port}/manifest.json`);
-    console.log(`Health: http://0.0.0.0:${port}/health`);
-    console.log(`Configure: http://0.0.0.0:${port}/configure`);
-    console.log(`Subtitle .srt: http://0.0.0.0:${port}/subtitles/:videoId/:language.srt`);
+    console.log(`Addon running at: http://127.0.0.1:${port}`);
+    console.log(`Configuration page available at the root URL or by clicking 'Configure' in Stremio.`);
 });
-
-
-// ...existing code...
