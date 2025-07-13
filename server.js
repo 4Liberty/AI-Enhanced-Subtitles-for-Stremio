@@ -127,6 +127,23 @@ app.get('/subtitles/:videoId/:language.srt', (req, res) => {
         });
 });
 
+// Health check endpoint
+app.get('/health', async (req, res) => {
+    const checks = {};
+    checks.gemini = !!process.env.GEMINI_API_KEY;
+    checks.opensubtitles = !!process.env.OPENSUBTITLES_API_KEY;
+    checks.tmdb = !!process.env.TMDB_API_KEY;
+    checks.subdl = !!process.env.SUBDL_API_KEY;
+    if (checks.tmdb) {
+        try {
+            const fetch = require('node-fetch');
+            const tmdbRes = await fetch(`https://api.themoviedb.org/3/configuration?api_key=${process.env.TMDB_API_KEY}`);
+            checks.tmdb_online = tmdbRes.ok;
+        } catch { checks.tmdb_online = false; }
+    }
+    res.json(checks);
+});
+
 
 
 // Add CORS headers for all responses (required for Stremio addon installation)
@@ -135,12 +152,41 @@ app.use((req, res, next) => {
     next();
 });
 
+// Manually implement Stremio SDK routes to keep all current features
+app.get('/manifest.json', (req, res) => {
+    res.setHeader('Content-Type', 'application/json');
+    res.send(JSON.stringify(addonInterface.manifest));
+});
 
+// Stream resource endpoints (POST and GET for compatibility)
+app.post('/stream/:type/:id', express.json(), async (req, res) => {
+    const { type, id } = req.params;
+    try {
+        const args = { type, id, extra: req.body?.extra || {} };
+        const result = await addonInterface.handlers.stream(args);
+        res.json(result);
+    } catch (err) {
+        console.error('[Express] Error in stream POST endpoint:', err);
+        res.status(500).json({ streams: [] });
+    }
+});
 
-// Attach Stremio SDK routes to the Express app (compatible with all SDK versions)
-app.use(require('stremio-addon-sdk').middleware(addonInterface));
+app.get('/stream/:type/:id', async (req, res) => {
+    const { type, id } = req.params;
+    try {
+        const args = { type, id, extra: req.query || {} };
+        const result = await addonInterface.handlers.stream(args);
+        res.json(result);
+    } catch (err) {
+        console.error('[Express] Error in stream GET endpoint:', err);
+        res.status(500).json({ streams: [] });
+    }
+});
 
 app.listen(port, () => {
-    console.log(`Addon running at: http://127.0.0.1:${port}`);
-    console.log(`Configuration page available at the root URL or by clicking 'Configure' in Stremio.`);
+    console.log(`Addon running at: http://0.0.0.0:${port}`);
+    console.log(`Manifest: http://0.0.0.0:${port}/manifest.json`);
+    console.log(`Health: http://0.0.0.0:${port}/health`);
+    console.log(`Configure: http://0.0.0.0:${port}/configure`);
+    console.log(`Subtitle .srt: http://0.0.0.0:${port}/subtitles/:videoId/:language.srt`);
 });
