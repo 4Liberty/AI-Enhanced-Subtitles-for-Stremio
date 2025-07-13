@@ -38,10 +38,11 @@ if (!process.env.GEMINI_API_KEY) {
 
 const manifest = {
     id: "com.stremio.ai.subtitle.corrector.tr.final",
-    version: "2.9.1",
+    version: "2.9.2",
     name: "AI Subtitle Corrector (TR)",
-    description: "Provides AI-corrected Turkish subtitles with a full customization UI and hash-matching.",
-    resources: ["subtitles", "stream"],
+    description: "Provides AI-corrected Turkish subtitles with hash matching and multiple sources.",
+    logo: "https://your-heroku-app.herokuapp.com/logo.svg",
+    resources: ["subtitles", "stream"], // Include stream for pre-caching
     types: ["movie", "series"],
     idPrefixes: ["tt", "tmdb"],
     catalogs: [],
@@ -49,12 +50,12 @@ const manifest = {
         configurable: true,
         configurationRequired: false
     },
-    // Add subtitle language support to make Stremio recognize us as a subtitle provider
+    // Stremio v4+ subtitle language support
     subtitleLanguages: ["tr"],
-    // Explicitly state that we provide subtitles
+    // Explicitly define what we provide
     provides: {
         subtitles: ["movie", "series"],
-        stream: ["movie", "series"]
+        stream: ["movie", "series"] // For pre-caching
     }
 };
 
@@ -80,7 +81,7 @@ const subtitleHandler = async (args) => {
     }
 };
 
-// Define the stream handler
+// Define the stream handler for pre-caching
 const streamHandler = async (args) => {
     console.log(`[Handler] Stream request received for: ${args.id}`);
     
@@ -105,16 +106,11 @@ const streamHandler = async (args) => {
             });
     }
     
-    const streams = []; // Empty for now, replace with actual stream fetching logic if needed
-    try {
-        const enriched = await getEnrichedStreams(args.type, args.id, streams);
-        return { streams: enriched };
-    } catch (error) {
-        console.error("[Handler] Error in stream handler:", error);
-        return { streams: [] };
-    }
+    // Return empty streams since we're focused on subtitles
+    return { streams: [] };
 };
 
+// Define both handlers
 builder.defineSubtitlesHandler(subtitleHandler);
 builder.defineStreamHandler(streamHandler);
 
@@ -170,6 +166,99 @@ app.get('/manifest.json', (req, res) => {
     res.setHeader('Content-Type', 'application/json');
     res.setHeader('Cache-Control', 'no-cache');
     res.send(JSON.stringify(addonInterface.manifest, null, 2));
+});
+
+// IMPORTANT: .srt route MUST come before other subtitle routes to prevent conflicts
+app.get('/subtitles/:videoId/:language.srt', async (req, res) => {
+    const { videoId, language } = req.params;
+    const { hash, test, fallback } = req.query;
+    
+    console.log(`[SRT Endpoint] Subtitle file request. Video ID: ${videoId}, Lang: ${language}, Hash: ${hash}, Test: ${test}, Fallback: ${fallback}`);
+
+    // If in test mode (no API keys), return a sample subtitle
+    if (test === 'true') {
+        const testSubtitle = `1
+00:00:01,000 --> 00:00:05,000
+Test Turkish subtitle for debugging
+
+2
+00:00:06,000 --> 00:00:10,000
+API Keys not configured - this is a test subtitle
+
+3
+00:00:11,000 --> 00:00:15,000
+VideoId: ${videoId}
+`;
+        res.setHeader('Content-Type', 'text/plain; charset=utf-8');
+        res.setHeader('Content-Disposition', `attachment; filename="${videoId}_${language}.srt"`);
+        res.send(testSubtitle);
+        return;
+    }
+
+    // If fallback mode, provide a basic subtitle
+    if (fallback === 'true') {
+        const fallbackSubtitle = `1
+00:00:01,000 --> 00:00:05,000
+Basic Turkish subtitle
+
+2
+00:00:06,000 --> 00:00:10,000
+Subtitle for ${videoId}
+
+3
+00:00:11,000 --> 00:00:15,000
+No external subtitle sources available
+`;
+        res.setHeader('Content-Type', 'text/plain; charset=utf-8');
+        res.setHeader('Content-Disposition', `attachment; filename="${videoId}_${language}.srt"`);
+        res.send(fallbackSubtitle);
+        return;
+    }
+
+    try {
+        const aiSubtitle = await getAICorrectedSubtitle(videoId, hash);
+        if (aiSubtitle) {
+            res.setHeader('Content-Type', 'text/plain; charset=utf-8');
+            res.setHeader('Content-Disposition', `attachment; filename="${videoId}_${language}.srt"`);
+            res.send(aiSubtitle);
+        } else {
+            console.error(`[SRT Endpoint] Subtitle generation failed for ${videoId}, providing fallback`);
+            // Provide a fallback subtitle instead of 404
+            const fallbackSubtitle = `1
+00:00:01,000 --> 00:00:05,000
+Turkish subtitle
+
+2
+00:00:06,000 --> 00:00:10,000
+Subtitle for ${videoId}
+
+3
+00:00:11,000 --> 00:00:15,000
+Could not generate AI subtitle
+`;
+            res.setHeader('Content-Type', 'text/plain; charset=utf-8');
+            res.setHeader('Content-Disposition', `attachment; filename="${videoId}_${language}.srt"`);
+            res.send(fallbackSubtitle);
+        }
+    } catch (err) {
+        console.error("[SRT Endpoint] CRITICAL ERROR while getting AI subtitle:", err);
+        // Provide a fallback subtitle instead of 500 error
+        const errorSubtitle = `1
+00:00:01,000 --> 00:00:05,000
+Turkish subtitle
+
+2
+00:00:06,000 --> 00:00:10,000
+Error occurred while generating subtitle
+
+3
+00:00:11,000 --> 00:00:15,000
+VideoId: ${videoId}
+`;
+        res.setHeader('Content-Type', 'text/plain; charset=utf-8');
+        res.setHeader('Content-Disposition', `attachment; filename="${videoId}_${language}.srt"`);
+        res.send(errorSubtitle);
+    }
 });
 
 // Subtitles resource endpoints that Stremio expects
@@ -247,97 +336,6 @@ app.get('/subtitles/:type/:id/:filename.json', async (req, res) => {
         res.json(result);
     } catch (err) {
         console.error('[Express] Error in subtitles filename.json endpoint:', err);
-        res.status(500).json({ subtitles: [] });
-    }
-});
-
-// Route for serving the actual .srt files
-app.get('/subtitles/:videoId/:language.srt', (req, res) => {
-    const { videoId, language } = req.params;
-    const { hash, test } = req.query;
-    
-    console.log(`[Endpoint] AI Subtitle file request. Video ID: ${videoId}, Lang: ${language}, Hash: ${hash}, Test: ${test}`);
-
-    // If in test mode (no API keys), return a sample subtitle
-    if (test === 'true') {
-        const testSubtitle = `1
-00:00:01,000 --> 00:00:05,000
-Test Turkish subtitle for debugging
-
-2
-00:00:06,000 --> 00:00:10,000
-API Keys not configured - this is a test subtitle
-
-3
-00:00:11,000 --> 00:00:15,000
-VideoId: ${videoId}
-`;
-        res.setHeader('Content-Type', 'text/plain; charset=utf-8');
-        res.setHeader('Content-Disposition', `attachment; filename="${videoId}_${language}.srt"`);
-        res.send(testSubtitle);
-        return;
-    }
-
-    getAICorrectedSubtitle(videoId, hash)
-        .then(correctedContent => {
-            if (correctedContent) {
-                res.setHeader('Content-Type', 'text/plain; charset=utf-8');
-                res.setHeader('Content-Disposition', `attachment; filename="${videoId}_${language}.srt"`);
-                res.send(correctedContent);
-            } else {
-                console.error(`[Endpoint] Subtitle generation failed for ${videoId}`);
-                res.status(404).send('Subtitle could not be generated.');
-            }
-        })
-        .catch(err => {
-            console.error("[Endpoint] CRITICAL ERROR while getting AI subtitle:", err);
-            res.status(500).send('Internal server error.');
-        });
-});
-
-// Subtitle resource endpoints (POST and GET for compatibility)
-app.post('/subtitles/:type/:id', async (req, res) => {
-    const { type, id } = req.params;
-    console.log(`[Express] POST /subtitles/${type}/${id} - Body:`, JSON.stringify(req.body, null, 2));
-    try {
-        const args = { type, id, extra: req.body?.extra || {} };
-        const result = await subtitleHandler(args);
-        result.subtitles = absolutizeSubtitleUrls(result, req).subtitles;
-        console.log(`[Express] POST subtitle result:`, JSON.stringify(result, null, 2));
-        res.json(result);
-    } catch (err) {
-        console.error('[Express] Error in subtitle POST endpoint:', err);
-        res.status(500).json({ subtitles: [] });
-    }
-});
-
-app.get('/subtitles/:type/:id', async (req, res) => {
-    const { type, id } = req.params;
-    console.log(`[Express] GET /subtitles/${type}/${id} - Query:`, JSON.stringify(req.query, null, 2));
-    try {
-        const args = { type, id, extra: req.query || {} };
-        const result = await subtitleHandler(args);
-        result.subtitles = absolutizeSubtitleUrls(result, req).subtitles;
-        console.log(`[Express] GET subtitle result:`, JSON.stringify(result, null, 2));
-        res.json(result);
-    } catch (err) {
-        console.error('[Express] Error in subtitle GET endpoint:', err);
-        res.status(500).json({ subtitles: [] });
-    }
-});
-
-// Support for .json extension on subtitle endpoints
-app.get('/subtitles/:type/:id.json', async (req, res) => {
-    const { type, id } = req.params;
-    console.log(`[Express] GET /subtitles/${type}/${id}.json - Query:`, JSON.stringify(req.query, null, 2));
-    try {
-        const args = { type, id, extra: req.query || {} };
-        const result = await subtitleHandler(args);
-        result.subtitles = absolutizeSubtitleUrls(result, req).subtitles;
-        console.log(`[Express] .json subtitle result:`, JSON.stringify(result, null, 2));
-        res.json(result);
-    } catch (err) {
-        console.error('[Express] Error in subtitle .json endpoint:', err);
         res.status(500).json({ subtitles: [] });
     }
 });
