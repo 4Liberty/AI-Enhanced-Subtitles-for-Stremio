@@ -139,16 +139,10 @@ app.get('/manifest.json', (req, res) => {
 
 // All other requests are handled by the Stremio addon SDK.
 const stremioMiddleware = serveHTTP(addonInterface);
-if (typeof stremioMiddleware === 'function') {
-    app.use('/', stremioMiddleware);
-} else if (stremioMiddleware && typeof stremioMiddleware.then === 'function') {
-    // If serveHTTP returns a Promise (shouldn't, but for robustness)
-    app.use('/', (req, res, next) => {
-        stremioMiddleware.then(fn => fn(req, res, next)).catch(next);
-    });
-} else {
+if (typeof stremioMiddleware !== 'function') {
     throw new Error('serveHTTP(addonInterface) did not return a middleware function');
 }
+app.use('/', stremioMiddleware);
 
 // Global error handler for uncaught errors in async routes
 app.use((err, req, res, next) => {
