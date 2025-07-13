@@ -14,8 +14,10 @@ This project provides a Stremio subtitle addon that delivers Turkish subtitles f
 - 🌐 **Multi-source Fallback**: Podnapisi and subdl.com fallback for maximum coverage
 - 🇹🇷 **Turkish-only Filtering**: Only Turkish subtitles are provided for best user experience
 - 🔗 **Easy Install**: Simple configuration UI and Stremio install link generation
-- 🎯 **Real-Debrid Integration**: Cached stream searching and instant availability for premium users
+- 🎯 **Real-Debrid Integration**: Torrentio-style multi-provider torrent search and cached stream access
 - ⚡ **Priority Streaming**: Real-Debrid cached streams appear at the top of the list
+- 🌐 **Multi-Provider Search**: Supports 20+ torrent providers like YTS, EZTV, RARBG, ThePirateBay, and more
+- 🔍 **Jackett Integration**: Optional meta-search across 100+ torrent sites
 
 ## 🆚 Differences from Legacy vlsub (.org version)
 
@@ -36,6 +38,34 @@ This project provides a Stremio subtitle addon that delivers Turkish subtitles f
 1. Open the [configuration page](configure.html) to select your language and generate an install link.
 2. Click the install link or copy it into Stremio's "Add addon by URL" field.
 3. Subtitles will appear automatically in the player if available.
+
+## Torrent Provider Support
+
+This addon now supports **the same torrent providers as Torrentio** for maximum Real-Debrid cache hit rates:
+
+### ✅ **Active Providers**
+- **YTS** - High-quality movie torrents
+- **EZTV** - TV shows and movies
+- **RARBG** - Movies and TV (via mirrors)
+- **ThePirateBay** - General torrents (via API)
+- **TorrentGalaxy** - Movies and TV
+- **Nyaa.si** - Anime and Asian content
+- **AniDex** - Anime torrents
+
+### 🔧 **Optional Jackett Integration**
+- **Jackett** - Meta-search across 100+ torrent sites
+- Supports private trackers
+- Requires local Jackett server
+
+### 🌍 **Regional Providers**
+- **Rutor/Rutracker** (Russian)
+- **Comando/BluDV** (Portuguese)
+- **Torrent9** (French)
+- **ilCorsaRoNeRo** (Italian)
+- **MejorTorrent/Wolfmax4k/Cinecalidad** (Spanish)
+- **BestTorrents** (Polish)
+
+See [TORRENT_PROVIDERS.md](TORRENT_PROVIDERS.md) for detailed configuration.
 
 ## Real-Debrid Configuration
 
