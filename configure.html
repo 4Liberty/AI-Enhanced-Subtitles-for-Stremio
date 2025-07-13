@@ -24,7 +24,7 @@
     function generateInstallLink() {
         const base = window.location.origin;
         const manifestUrl = base + '/manifest.json';
-        const stremioLink = `stremio://${encodeURIComponent(manifestUrl)}`;
+        const stremioLink = `stremio://${base.replace('https://', '').replace('http://', '')}/manifest.json`;
         document.getElementById('stremio-install-link').textContent = stremioLink;
         document.getElementById('stremio-install-link-container').style.display = 'block';
         navigator.clipboard.writeText(stremioLink).catch(()=>{});

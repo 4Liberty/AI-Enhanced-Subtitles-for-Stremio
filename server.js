@@ -58,15 +58,29 @@ const addonInterface = builder.getInterface();
 const app = express();
 const port = process.env.PORT || 7000;
 
+// Add CORS headers for all responses (MUST BE FIRST for Stremio addon installation)
+app.use((req, res, next) => {
+    res.setHeader('Access-Control-Allow-Origin', '*');
+    res.setHeader('Access-Control-Allow-Methods', 'GET, POST, OPTIONS');
+    res.setHeader('Access-Control-Allow-Headers', 'Content-Type');
+    if (req.method === 'OPTIONS') {
+        return res.sendStatus(200);
+    }
+    next();
+});
+
+// Add JSON body parsing
+app.use(express.json());
+
+// Serve static files from project root (for logo.svg, etc.)
+app.use(express.static(__dirname));
+
 // Route for the configuration page.
 const configureRoute = (req, res) => {
     res.sendFile(path.join(__dirname, 'configure.html'));
 };
 app.get('/', configureRoute);
 app.get('/configure', configureRoute);
-
-// Serve static files from project root (for logo.svg, etc.)
-app.use(express.static(__dirname));
 
 // Helper to ensure absolute URLs in subtitle options
 function absolutizeSubtitleUrls(result, req) {
@@ -90,22 +104,36 @@ app.get('/subtitles/:type/:id.json', async (req, res) => {
     res.json(result);
 });
 
-// Also support GET /subtitles/:type/:id for maximum compatibility
-app.get('/subtitles/:type/:id', async (req, res) => {
-    const { type, id } = req.params;
-    const infoHash = req.query.hash || null;
-    let result = await getSubtitleUrlsForStremio(id, infoHash);
-    result = absolutizeSubtitleUrls(result, req);
-    res.json(result);
+// Manifest endpoint
+app.get('/manifest.json', (req, res) => {
+    res.setHeader('Content-Type', 'application/json');
+    res.setHeader('Cache-Control', 'no-cache');
+    res.send(JSON.stringify(addonInterface.manifest, null, 2));
 });
 
-// POST support for legacy Stremio clients
-app.post('/subtitles/:type/:id', express.json(), async (req, res) => {
+// Subtitles resource endpoints that Stremio expects (using SDK handlers)
+app.post('/subtitles/:type/:id', async (req, res) => {
     const { type, id } = req.params;
-    const infoHash = req.body?.extra?.video_hash || null;
-    let result = await getSubtitleUrlsForStremio(id, infoHash);
-    result = absolutizeSubtitleUrls(result, req);
-    res.json(result);
+    try {
+        const args = { type, id, extra: req.body?.extra || {} };
+        const result = await addonInterface.handlers.subtitles(args);
+        res.json(result);
+    } catch (err) {
+        console.error('[Express] Error in subtitles POST endpoint:', err);
+        res.status(500).json({ subtitles: [] });
+    }
+});
+
+app.get('/subtitles/:type/:id', async (req, res) => {
+    const { type, id } = req.params;
+    try {
+        const args = { type, id, extra: req.query || {} };
+        const result = await addonInterface.handlers.subtitles(args);
+        res.json(result);
+    } catch (err) {
+        console.error('[Express] Error in subtitles GET endpoint:', err);
+        res.status(500).json({ subtitles: [] });
+    }
 });
 
 // Route for serving the actual .srt files.
@@ -146,49 +174,8 @@ app.get('/health', async (req, res) => {
     res.json(checks);
 });
 
-
-
-// Add CORS headers for all responses (required for Stremio addon installation)
-app.use((req, res, next) => {
-    res.setHeader('Access-Control-Allow-Origin', '*');
-    next();
-});
-
-// Manually implement Stremio SDK routes to keep all current features
-app.get('/manifest.json', (req, res) => {
-    res.setHeader('Content-Type', 'application/json');
-    res.setHeader('Access-Control-Allow-Origin', '*');
-    res.setHeader('Cache-Control', 'no-cache');
-    res.send(JSON.stringify(addonInterface.manifest, null, 2));
-});
-
-// Subtitles resource endpoints that Stremio expects (using SDK handlers)
-app.post('/subtitles/:type/:id', express.json(), async (req, res) => {
-    const { type, id } = req.params;
-    try {
-        const args = { type, id, extra: req.body?.extra || {} };
-        const result = await addonInterface.handlers.subtitles(args);
-        res.json(result);
-    } catch (err) {
-        console.error('[Express] Error in subtitles POST endpoint:', err);
-        res.status(500).json({ subtitles: [] });
-    }
-});
-
-app.get('/subtitles/:type/:id', async (req, res) => {
-    const { type, id } = req.params;
-    try {
-        const args = { type, id, extra: req.query || {} };
-        const result = await addonInterface.handlers.subtitles(args);
-        res.json(result);
-    } catch (err) {
-        console.error('[Express] Error in subtitles GET endpoint:', err);
-        res.status(500).json({ subtitles: [] });
-    }
-});
-
 // Stream resource endpoints (POST and GET for compatibility)
-app.post('/stream/:type/:id', express.json(), async (req, res) => {
+app.post('/stream/:type/:id', async (req, res) => {
     const { type, id } = req.params;
     try {
         const args = { type, id, extra: req.body?.extra || {} };
