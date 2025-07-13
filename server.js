@@ -19,7 +19,15 @@ const manifest = {
     idPrefixes: ["tt", "tmdb"],
     catalogs: [],
     behaviorHints: {
-        configurable: true
+        configurable: true,
+        configurationRequired: false
+    },
+    // Add subtitle language support to make Stremio recognize us as a subtitle provider
+    subtitleLanguages: ["tr"],
+    // Explicitly state that we provide subtitles
+    provides: {
+        subtitles: ["movie", "series"],
+        stream: ["movie", "series"]
     }
 };
 
@@ -48,6 +56,28 @@ const subtitleHandler = async (args) => {
 // Define the stream handler
 const streamHandler = async (args) => {
     console.log(`[Handler] Stream request received for: ${args.id}`);
+    
+    // Extract the clean movie ID (remove .json extension if present)
+    const movieId = args.id.replace('.json', '');
+    console.log(`[Handler] Clean movie ID for pre-caching: ${movieId}`);
+    
+    // Pre-cache subtitles in the background for faster response when user clicks play
+    if (movieId.startsWith('tt')) {
+        console.log(`[Handler] Starting subtitle pre-caching for ${movieId}`);
+        // Don't await this - let it run in background
+        getSubtitleUrlsForStremio(movieId, null)
+            .then(result => {
+                if (result && result.subtitles && result.subtitles.length > 0) {
+                    console.log(`[Handler] Pre-cached ${result.subtitles.length} subtitle option(s) for ${movieId}`);
+                } else {
+                    console.log(`[Handler] No subtitles found during pre-caching for ${movieId}`);
+                }
+            })
+            .catch(err => {
+                console.error(`[Handler] Pre-caching failed for ${movieId}:`, err);
+            });
+    }
+    
     const streams = []; // Empty for now, replace with actual stream fetching logic if needed
     try {
         const enriched = await getEnrichedStreams(args.type, args.id, streams);
@@ -78,6 +108,12 @@ app.use((req, res, next) => {
 
 // Add JSON body parsing
 app.use(express.json());
+
+// Add request logging middleware to see all incoming requests
+app.use((req, res, next) => {
+    console.log(`[Request] ${req.method} ${req.path} - Headers: ${JSON.stringify(req.headers)}`);
+    next();
+});
 
 // Serve static files from project root (for logo.svg, etc.)
 app.use(express.static(__dirname));
