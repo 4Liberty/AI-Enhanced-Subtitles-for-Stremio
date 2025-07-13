@@ -1,10 +1,4 @@
-// Stremio subtitles resource endpoint (Stremio expects this for subtitle options)
-app.get('/subtitles/:type/:id.json', async (req, res) => {
-    const { type, id } = req.params;
-    const infoHash = req.query.hash || null;
-    const result = await getSubtitleUrlsForStremio(id, infoHash);
-    res.json(result);
-});
+// ...existing code...
 
 // --- In-memory cache for AI-enhanced subtitles ---
 // Key: `${videoId}:${language}:${infoHash || ''}`
@@ -14,6 +8,14 @@ const AI_SLOW_THRESHOLD_MS = 8000;
 const fs = require('fs');
 const express = require('express');
 const app = express();
+
+// Stremio subtitles resource endpoint (Stremio expects this for subtitle options)
+app.get('/subtitles/:type/:id.json', async (req, res) => {
+    const { type, id } = req.params;
+    const infoHash = req.query.hash || null;
+    const result = await getSubtitleUrlsForStremio(id, infoHash);
+    res.json(result);
+});
 const { addonBuilder } = require('stremio-addon-sdk');
 const path = require('path');
 const { getAICorrectedSubtitle, getSubtitleUrlsForStremio } = require('./lib/subtitleMatcher');
