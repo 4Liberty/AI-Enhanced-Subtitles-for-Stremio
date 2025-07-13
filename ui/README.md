@@ -2,7 +2,7 @@
 
 ## Overview
 
-The VLC Subtitle & Real-Debrid Extension now includes a comprehensive, modern web interface with advanced health monitoring and settings management.
+The Stremio AI Subtitle & Real-Debrid Addon now includes a comprehensive, modern web interface with advanced health monitoring and settings management.
 
 ## Features
 
@@ -225,7 +225,7 @@ test-ui.js             # UI testing script
 ```
 
 ### API Integration
-The beautiful UI integrates seamlessly with the existing VLC extension through RESTful API endpoints that provide real-time data and configuration management.
+The beautiful UI integrates seamlessly with the existing Stremio addon through RESTful API endpoints that provide real-time data and configuration management.
 
 ### Customization
 The UI supports easy customization through CSS variables and modular JavaScript components, allowing for theme modifications and feature extensions.
@@ -257,4 +257,4 @@ The beautiful UI is designed to be extensible and welcomes community contributio
 
 ---
 
-**Note**: This beautiful UI enhances the VLC Subtitle & Real-Debrid Extension with a modern, comprehensive interface while maintaining full backward compatibility with existing functionality.
+**Note**: This beautiful UI enhances the Stremio AI Subtitle & Real-Debrid Addon with a modern, comprehensive interface while maintaining full backward compatibility with existing functionality.

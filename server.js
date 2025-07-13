@@ -580,7 +580,7 @@ app.get('/health', async (req, res) => {
 });
 
 app.listen(port, () => {
-    console.log(`\n🚀 VLC Subtitle & Real-Debrid Extension is running!`);
+    console.log(`\n🚀 Stremio AI Subtitle & Real-Debrid Addon is running!`);
     console.log(`📍 Main URL: http://0.0.0.0:${port}`);
     console.log(`🎨 Beautiful UI: http://0.0.0.0:${port}/ui`);
     console.log(`📋 Manifest: http://0.0.0.0:${port}/manifest.json`);

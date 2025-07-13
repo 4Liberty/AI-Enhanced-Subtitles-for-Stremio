@@ -112,39 +112,44 @@ Set-ExecutionPolicy -ExecutionPolicy RemoteSigned -Scope CurrentUser; iwr -useb 
 
 ### Method 2: Manual Installation
 
-1. **Download** the latest `vlsubcom.lua` from [Releases](https://github.com/opensubtitles/vlsub-opensubtitles-com/releases)
-2. **Copy** to your VLC extensions directory:
-   - **Windows**: `%APPDATA%\vlc\lua\extensions\`
-   - **macOS**: `~/Library/Application Support/org.videolan.vlc/lua/extensions/`
-   - **Linux**: `~/.local/share/vlc/lua/extensions/`
-3. **Restart** VLC Media Player
-4. **Access** via `View → VLSub OpenSubtitles.com`
+1. **Clone or download** this repository
+2. **Install dependencies**:
+   ```bash
+   npm install
+   ```
+3. **Start the addon server**:
+   ```bash
+   npm start
+   ```
+4. **Add to Stremio**: Use `http://localhost:7000/manifest.json` as the addon URL
+5. **Access beautiful UI**: Open `http://localhost:7000/ui` for advanced configuration
 
 ## 📋 Requirements
 
-- **VLC Media Player** 3.0 or newer
+- **Stremio** desktop or mobile app
+- **Node.js** 16.0 or newer
 - **OpenSubtitles.com account** ([free registration](https://www.opensubtitles.com/newuser))
 - **Internet connection** for searching and downloading
-- **curl** command-line tool (for downloads - usually pre-installed)
+- **Real-Debrid account** (optional, for premium cached streams)
 
 ## 🎬 Usage
 
 ### Quick Start
-1. **Setup**: Open VLC → View → VLSub OpenSubtitles.com → Config
-2. **Login**: Enter your OpenSubtitles.com username and password
-3. **Play**: Start your video file
-4. **Search**: Click "🎯 Search by Hash" for exact matches or "🔍 Search by Name"
-5. **Download**: Click download and load automatically
+1. **Setup**: Install the addon in Stremio using the manifest URL
+2. **Login**: Configure your OpenSubtitles.com credentials via the web UI
+3. **Play**: Start any video in Stremio
+4. **Subtitles**: Available subtitles will appear automatically in the player
+5. **Advanced**: Access `http://localhost:7000/ui` for detailed configuration
 
 ### Search Methods
 
 #### 🎯 Hash Search (Recommended)
-- **Best for**: Local video files
+- **Best for**: Any video content in Stremio
 - **Accuracy**: Finds exactly synchronized subtitles
-- **How it works**: Calculates unique file fingerprint for perfect matching, failback to Name Search
+- **How it works**: Calculates unique file fingerprint for perfect matching, falls back to Name Search
 
 #### 🔍 Name Search
-- **Best for**: Streaming content, renamed files, or when hash fails
+- **Best for**: When hash search fails or for alternative subtitles
 - **Features**: Uses GuessIt to extract title, year, season, episode from filename
-- **Flexibility**: Works with various naming conventions
+- **Flexibility**: Works with various naming conventions and streaming sources
 

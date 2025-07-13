@@ -1,6 +1,6 @@
-# 🎨 Beautiful UI for VLC Subtitle & Real-Debrid Extension
+# 🎨 Beautiful UI for Stremio AI Subtitle & Real-Debrid Addon
 
-Your VLC extension now includes a **stunning, modern web interface** with comprehensive health monitoring and advanced settings management!
+Your Stremio addon now includes a **stunning, modern web interface** with comprehensive health monitoring and advanced settings management!
 
 ## 🚀 Quick Start
 
