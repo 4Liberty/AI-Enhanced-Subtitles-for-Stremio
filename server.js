@@ -70,15 +70,16 @@ const addonInterface = builder.getInterface();
 
 // --- Stremio Addon SDK HTTP server (for Stremio endpoints and .srt endpoint) ---
 const stremioPort = process.env.PORT || 7000;
+
+const fs = require('fs');
 serveHTTP({
     ...addonInterface,
-    // Custom HTTP handler for .srt files
     get(req, res, next) {
-        // Only handle /subtitles/:videoId/:language.srt
-        const match = req.url.match(/^\/subtitles\/([^\/]+)\/([a-z]{2})\.srt(\?.*)?$/);
-        if (match) {
-            const videoId = match[1];
-            const language = match[2];
+        // Serve /subtitles/:videoId/:language.srt
+        const srtMatch = req.url.match(/^\/subtitles\/([^\/]+)\/([a-z]{2})\.srt(\?.*)?$/);
+        if (srtMatch) {
+            const videoId = srtMatch[1];
+            const language = srtMatch[2];
             console.log(`[Stremio HTTP] AI Subtitle file request hit. Video ID: ${videoId}, Lang: ${language}`);
             getAICorrectedSubtitle(videoId, language).then(correctedContent => {
                 if (correctedContent) {
@@ -94,6 +95,46 @@ serveHTTP({
                 res.statusCode = 500;
                 res.end('Internal server error.');
             });
+            return;
+        }
+        // Serve / and /configure
+        if (req.url === '/' || req.url === '/configure' || req.url === '/configure/') {
+            const filePath = path.join(__dirname, 'configure.html');
+            fs.readFile(filePath, (err, data) => {
+                if (err) {
+                    res.statusCode = 500;
+                    res.end('Could not load configure.html');
+                } else {
+                    res.setHeader('Content-Type', 'text/html; charset=utf-8');
+                    res.end(data);
+                }
+            });
+            return;
+        }
+        // Serve /health
+        if (req.url === '/health' || req.url === '/health/') {
+            const checks = {};
+            checks.gemini = !!process.env.GEMINI_API_KEY;
+            checks.opensubtitles = !!process.env.OPENSUBTITLES_API_KEY;
+            checks.tmdb = !!process.env.TMDB_API_KEY;
+            checks.subdl = !!process.env.SUBDL_API_KEY;
+            if (checks.tmdb) {
+                // Optionally check TMDB online
+                fetch(`https://api.themoviedb.org/3/configuration?api_key=${process.env.TMDB_API_KEY}`)
+                    .then(tmdbRes => {
+                        checks.tmdb_online = tmdbRes.ok;
+                        res.setHeader('Content-Type', 'application/json');
+                        res.end(JSON.stringify(checks));
+                    })
+                    .catch(() => {
+                        checks.tmdb_online = false;
+                        res.setHeader('Content-Type', 'application/json');
+                        res.end(JSON.stringify(checks));
+                    });
+            } else {
+                res.setHeader('Content-Type', 'application/json');
+                res.end(JSON.stringify(checks));
+            }
             return;
         }
         // Fallback to default handler
