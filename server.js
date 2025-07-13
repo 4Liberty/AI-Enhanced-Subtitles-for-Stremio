@@ -188,59 +188,6 @@ const streamHandler = async (args) => {
     return { streams };
 };
 
-// Helper function to generate sample Real-Debrid streams
-function generateSampleRealDebridStreams(movieId) {
-    console.log(`[Sample] Generating sample Real-Debrid streams for ${movieId}`);
-    
-    const sampleStreams = [
-        {
-            title: 'Real-Debrid Cached 2160p (Sample)',
-            url: `https://sample-cached-url.real-debrid.com/sample-4k-${movieId}`,
-            quality: '2160p',
-            seeds: 500,
-            peers: 10,
-            behaviorHints: {
-                notWebReady: false,
-                realDebrid: true,
-                cached: true,
-                instantAvailable: true
-            },
-            infoHash: '9a0b1c2d3e4f5a6b7c8d9e0f1a2b3c4d5e6f7a8b'
-        },
-        {
-            title: 'Real-Debrid Cached 1080p (Sample)',
-            url: `https://sample-cached-url.real-debrid.com/sample-1080p-${movieId}`,
-            quality: '1080p',
-            seeds: 300,
-            peers: 5,
-            behaviorHints: {
-                notWebReady: false,
-                realDebrid: true,
-                cached: true,
-                instantAvailable: true
-            },
-            infoHash: '3a4b5c6d7e8f9a0b1c2d3e4f5a6b7c8d9e0f1a2b'
-        },
-        {
-            title: 'Real-Debrid Cached 720p (Sample)',
-            url: `https://sample-cached-url.real-debrid.com/sample-720p-${movieId}`,
-            quality: '720p',
-            seeds: 150,
-            peers: 3,
-            behaviorHints: {
-                notWebReady: false,
-                realDebrid: true,
-                cached: true,
-                instantAvailable: true
-            },
-            infoHash: '1a2b3c4d5e6f7a8b9c0d1e2f3a4b5c6d7e8f9a0b'
-        }
-    ];
-    
-    console.log(`[Sample] Generated ${sampleStreams.length} sample Real-Debrid streams`);
-    return sampleStreams;
-}
-
 // Define both handlers
 builder.defineSubtitlesHandler(subtitleHandler);
 builder.defineStreamHandler(streamHandler);
@@ -276,10 +223,9 @@ app.use(express.static(__dirname));
 const configureRoute = (req, res) => {
     res.sendFile(path.join(__dirname, 'configure.html'));
 };
-app.get('/', configureRoute);
 app.get('/configure', configureRoute);
 
-// Setup UI routes
+// Setup UI routes (includes root redirect to /ui)
 setupUIRoutes(app);
 
 // Helper to ensure absolute URLs in subtitle options
@@ -558,9 +504,6 @@ app.get('/stream/:type/:id.json', async (req, res) => {
         res.status(500).json({ streams: [] });
     }
 });
-
-// Setup beautiful UI with health monitoring
-setupUIRoutes(app);
 
 // Legacy health check endpoint (maintained for compatibility)
 app.get('/health', async (req, res) => {

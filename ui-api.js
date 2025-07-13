@@ -74,9 +74,19 @@ function setupUIRoutes(app) {
     // Serve static UI files
     app.use('/ui', express.static(path.join(__dirname, 'ui')));
     
+    // Serve logo.svg from root directory to UI path
+    app.get('/ui/logo.svg', (req, res) => {
+        res.sendFile(path.join(__dirname, 'logo.svg'));
+    });
+    
     // Redirect root to UI
     app.get('/', (req, res) => {
         res.redirect('/ui');
+    });
+    
+    // Quick access to manifest
+    app.get('/manifest', (req, res) => {
+        res.redirect('/manifest.json');
     });
     
     // Stats endpoint
