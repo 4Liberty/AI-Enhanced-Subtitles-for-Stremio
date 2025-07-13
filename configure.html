@@ -1,113 +1,74 @@
+
 <!DOCTYPE html>
 <html lang="en">
 <head>
     <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Configure Subtitle Matcher</title>
+    <title>AI Subtitle Corrector (TR) - Configuration</title>
+    <meta name="viewport" content="width=device-width, initial-scale=1">
     <style>
-        body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif; background-color: #1a1a1a; color: #e0e0e0; margin: 0; padding: 2rem; display: flex; justify-content: center; align-items: center; min-height: 100vh; }
-        .container { background-color: #2c2c2c; padding: 2rem 3rem; border-radius: 12px; box-shadow: 0 10px 30px rgba(0,0,0,0.5); max-width: 600px; width: 100%; }
-        h1 { color: #4ade80; text-align: center; margin-bottom: 1rem; }
-        p { text-align: center; color: #a0a0a0; margin-bottom: 2rem; }
-        .language-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(120px, 1fr)); gap: 1rem; margin-bottom: 2rem; }
-        .lang-option { background-color: #3a3a3a; padding: 0.75rem; border-radius: 8px; display: flex; align-items: center; cursor: pointer; transition: background-color 0.2s; }
-        .lang-option:hover { background-color: #4a4a4a; }
-        .lang-option input { margin-right: 0.75rem; width: 18px; height: 18px; }
-        .button-container { text-align: center; }
-        button { background-color: #4ade80; color: #1a1a1a; border: none; padding: 0.75rem 1.5rem; border-radius: 8px; font-size: 1rem; font-weight: bold; cursor: pointer; transition: background-color 0.2s; }
-        button:hover { background-color: #6ee7b7; }
-        #install-link-container { margin-top: 1.5rem; text-align: center; }
-        #install-link { color: #4ade80; font-weight: bold; text-decoration: none; word-break: break-all; }
+        body { font-family: Arial, sans-serif; background: #f7f7f7; margin: 0; padding: 0; }
+        .container { max-width: 650px; margin: 40px auto; background: #fff; border-radius: 8px; box-shadow: 0 2px 8px #0001; padding: 32px; }
+        h1 { color: #1a73e8; margin-bottom: 0.5em; }
+        .section { margin-bottom: 2em; }
+        label { display: block; margin-bottom: 0.5em; font-weight: bold; }
+        input[type="text"], input[type="password"] { width: 100%; padding: 8px; margin-bottom: 1em; border: 1px solid #ccc; border-radius: 4px; }
+        .env-list { background: #f0f0f0; padding: 1em; border-radius: 4px; font-size: 0.95em; }
+        .note { color: #888; font-size: 0.95em; }
+        .footer { text-align: center; color: #aaa; font-size: 0.9em; margin-top: 2em; }
+        .logo { width: 48px; vertical-align: middle; margin-right: 10px; }
+        .install-link { background: #e3f2fd; border: 1px solid #90caf9; padding: 10px; border-radius: 6px; margin: 1em 0; font-size: 1.1em; word-break: break-all; }
+        .button { background: #1a73e8; color: #fff; border: none; border-radius: 4px; padding: 10px 18px; font-size: 1em; cursor: pointer; margin-top: 1em; }
+        .button:hover { background: #1765c1; }
     </style>
+    <script>
+    function generateInstallLink() {
+        const base = window.location.origin;
+        const manifestUrl = base + '/manifest.json';
+        const stremioLink = `stremio://addon/manifest.json?url=${encodeURIComponent(manifestUrl)}`;
+        document.getElementById('stremio-install-link').textContent = stremioLink;
+        document.getElementById('stremio-install-link-container').style.display = 'block';
+        navigator.clipboard.writeText(stremioLink).catch(()=>{});
+    }
+    </script>
 </head>
 <body>
     <div class="container">
-        <h1>Configure Your Addon</h1>
-        <p>Select your preferred languages. <span style="color:#4ade80;font-weight:bold;">Subtitles marked <span style='background:#222;padding:2px 8px;border-radius:6px;color:#fff;font-size:0.95em;'>🎯 Perfect Match</span> are hash-matched and guaranteed to be in sync.</span></p>
-        <div style="margin:2rem 0 1rem 0;text-align:center;">
-            <span style="display:inline-block;background:#222;padding:6px 16px;border-radius:8px;color:#4ade80;font-weight:bold;font-size:1.1em;">
-                🎯 Perfect Match = Hash-matched, guaranteed sync
-            </span>
+        <h1><img src="logo.svg" class="logo" alt="Logo">AI Subtitle Corrector (TR)</h1>
+        <div class="section">
+            <h2>Configuration & Diagnostics</h2>
+            <p>This page provides information about your Stremio AI Subtitle Addon deployment and environment. To change API keys, set the following environment variables in your hosting provider (Heroku, etc):</p>
+            <div class="env-list">
+                <strong>Required:</strong><br>
+                GEMINI_API_KEY<br>
+                OPENSUBTITLES_API_KEY<br>
+                TMDB_API_KEY<br>
+                SUBDL_API_KEY
+            </div>
+            <p class="note">After updating environment variables, restart your server for changes to take effect.</p>
         </div>
-
-        <div class="language-grid" id="languageGrid"></div>
-
-        <div class="button-container">
-            <button onclick="generateInstallLink()">Generate & Copy Install Link</button>
+        <div class="section">
+            <h2>Health Check</h2>
+            <p>Check the <a href="/health" target="_blank">/health</a> endpoint for live diagnostics.</p>
         </div>
-
-        <div id="stremio-install-link-container" style="display:none; margin-top:1.5rem; text-align:center;">
-            <a href="#" id="stremio-install-link" style="background:#4ade80;color:#1a1a1a;padding:0.75rem 1.5rem;border-radius:8px;font-weight:bold;text-decoration:none;">Install in Stremio</a>
+        <div class="section">
+            <h2>Endpoints</h2>
+            <ul>
+                <li><strong>Manifest:</strong> <code>/manifest.json</code></li>
+                <li><strong>Subtitle .srt:</strong> <code>/subtitles/:videoId/:language.srt</code></li>
+                <li><strong>Configure:</strong> <code>/configure</code> (this page)</li>
+            </ul>
         </div>
-
-        <div id="install-link-container" style="display:none;">
-            <a href="#" id="install-link">Click here to install in Stremio</a>
+        <div class="section">
+            <h2>Stremio Install Link</h2>
+            <button class="button" onclick="generateInstallLink()">Generate & Copy Stremio Install Link</button>
+            <div id="stremio-install-link-container" style="display:none;">
+                <div class="install-link" id="stremio-install-link"></div>
+                <div class="note">Link copied to clipboard. Paste into Stremio's "Add addon by URL" field.</div>
+            </div>
+        </div>
+        <div class="footer">
+            &copy; 2025 AI Subtitle Corrector (TR) &mdash; <a href="https://github.com/4Liberty/vlsub-opensubtitles-com" target="_blank">GitHub</a>
         </div>
     </div>
-
-    <script>
-        const languages = [
-            { code: 'en', name: 'English' }, { code: 'es', name: 'Spanish' }, { code: 'fr', name: 'French' },
-            { code: 'de', name: 'German' }, { code: 'it', name: 'Italian' }, { code: 'pt', name: 'Portuguese' },
-            { code: 'ru', name: 'Russian' }, { code: 'tr', name: 'Turkish' }, { code: 'nl', name: 'Dutch' },
-            { code: 'sv', name: 'Swedish' }, { code: 'no', name: 'Norwegian' }, { code: 'da', name: 'Danish' }
-        ];
-
-        const grid = document.getElementById('languageGrid');
-
-        // --- Parse config from URL if present ---
-        function getConfigFromUrl() {
-            const match = window.location.pathname.match(/^\/(.+)\/configure$/);
-            if (match && match[1]) {
-                try {
-                    const decoded = atob(match[1]);
-                    return JSON.parse(decoded);
-                } catch (e) { return null; }
-            }
-            return null;
-        }
-        const userConfig = getConfigFromUrl();
-        const selectedLangs = userConfig && Array.isArray(userConfig.languages) ? userConfig.languages : ['en'];
-
-        languages.forEach(lang => {
-            const label = document.createElement('label');
-            label.className = 'lang-option';
-            const checked = selectedLangs.includes(lang.code) ? 'checked' : '';
-            label.innerHTML = `<input type="checkbox" name="language" value="${lang.code}" ${checked}> ${lang.name}`;
-            grid.appendChild(label);
-        });
-
-        function generateInstallLink() {
-            const selectedLanguages = Array.from(document.querySelectorAll('input[name="language"]:checked')).map(cb => cb.value);
-
-            if (selectedLanguages.length === 0) {
-                alert('Please select at least one language.');
-                return;
-            }
-
-            const config = { languages: selectedLanguages };
-            const baseUrl = window.location.origin;
-            const configStr = btoa(JSON.stringify(config)); // Encode config as Base64
-            const installUrl = `${baseUrl}/${configStr}/manifest.json`;
-
-            // Show plain URL for manual copy-paste
-            const installLinkElement = document.getElementById('install-link');
-            installLinkElement.href = installUrl;
-            installLinkElement.textContent = installUrl;
-            document.getElementById('install-link-container').style.display = 'block';
-
-            // Show stremio:// install link for direct install
-            const stremioInstallLink = document.getElementById('stremio-install-link');
-            stremioInstallLink.href = `stremio://${installUrl.replace(/^https?:\/\//, '')}`;
-            document.getElementById('stremio-install-link-container').style.display = 'block';
-
-            navigator.clipboard.writeText(installUrl).then(() => {
-                alert('Install link copied to clipboard! You can also click "Install in Stremio" for direct install on desktop/mobile.');
-            }).catch(err => {
-                console.error('Could not copy text: ', err);
-                alert('Could not copy link. Please manually copy the link shown below.');
-            });
-        }
-    </script>
 </body>
 </html>
