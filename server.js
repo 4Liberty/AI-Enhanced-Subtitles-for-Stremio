@@ -28,11 +28,15 @@ const builder = new addonBuilder(manifest);
 
 builder.defineSubtitlesHandler(async (args) => {
     console.log(`[Handler] Subtitle request received for: ${args.id}`);
+    console.log(`[Handler] Full args:`, JSON.stringify(args, null, 2));
     try {
         const infoHash = args.extra && args.extra.video_hash ? args.extra.video_hash : null;
         const result = await getSubtitleUrlsForStremio(args.id, infoHash);
         if (result && result.subtitles && result.subtitles.length > 0) {
             console.log(`[Handler] Successfully generated ${result.subtitles.length} subtitle option(s).`);
+            console.log(`[Handler] Subtitle options:`, JSON.stringify(result.subtitles, null, 2));
+        } else {
+            console.log(`[Handler] No subtitles found for ${args.id}`);
         }
         return result;
     } catch (error) {
@@ -98,9 +102,11 @@ function absolutizeSubtitleUrls(result, req) {
 // Stremio subtitles resource endpoint (Stremio expects this for subtitle options)
 app.get('/subtitles/:type/:id.json', async (req, res) => {
     const { type, id } = req.params;
+    console.log(`[Express] GET /subtitles/${type}/${id}.json - Query:`, JSON.stringify(req.query, null, 2));
     const infoHash = req.query.hash || null;
     let result = await getSubtitleUrlsForStremio(id, infoHash);
     result = absolutizeSubtitleUrls(result, req);
+    console.log(`[Express] .json result:`, JSON.stringify(result, null, 2));
     res.json(result);
 });
 
@@ -114,9 +120,11 @@ app.get('/manifest.json', (req, res) => {
 // Subtitles resource endpoints that Stremio expects (using SDK handlers)
 app.post('/subtitles/:type/:id', async (req, res) => {
     const { type, id } = req.params;
+    console.log(`[Express] POST /subtitles/${type}/${id} - Body:`, JSON.stringify(req.body, null, 2));
     try {
         const args = { type, id, extra: req.body?.extra || {} };
         const result = await addonInterface.handlers.subtitles(args);
+        console.log(`[Express] POST result:`, JSON.stringify(result, null, 2));
         res.json(result);
     } catch (err) {
         console.error('[Express] Error in subtitles POST endpoint:', err);
@@ -126,9 +134,11 @@ app.post('/subtitles/:type/:id', async (req, res) => {
 
 app.get('/subtitles/:type/:id', async (req, res) => {
     const { type, id } = req.params;
+    console.log(`[Express] GET /subtitles/${type}/${id} - Query:`, JSON.stringify(req.query, null, 2));
     try {
         const args = { type, id, extra: req.query || {} };
         const result = await addonInterface.handlers.subtitles(args);
+        console.log(`[Express] GET result:`, JSON.stringify(result, null, 2));
         res.json(result);
     } catch (err) {
         console.error('[Express] Error in subtitles GET endpoint:', err);
@@ -179,8 +189,12 @@ app.post('/stream/:type/:id', async (req, res) => {
     const { type, id } = req.params;
     try {
         const args = { type, id, extra: req.body?.extra || {} };
-        const result = await addonInterface.handlers.stream(args);
-        res.json(result);
+        if (addonInterface.handlers.stream) {
+            const result = await addonInterface.handlers.stream(args);
+            res.json(result);
+        } else {
+            res.json({ streams: [] });
+        }
     } catch (err) {
         console.error('[Express] Error in stream POST endpoint:', err);
         res.status(500).json({ streams: [] });
@@ -191,11 +205,62 @@ app.get('/stream/:type/:id', async (req, res) => {
     const { type, id } = req.params;
     try {
         const args = { type, id, extra: req.query || {} };
-        const result = await addonInterface.handlers.stream(args);
-        res.json(result);
+        if (addonInterface.handlers.stream) {
+            const result = await addonInterface.handlers.stream(args);
+            res.json(result);
+        } else {
+            res.json({ streams: [] });
+        }
     } catch (err) {
         console.error('[Express] Error in stream GET endpoint:', err);
         res.status(500).json({ streams: [] });
+    }
+});
+
+// Support for .json extension on stream endpoints
+app.get('/stream/:type/:id.json', async (req, res) => {
+    const { type, id } = req.params;
+    try {
+        const args = { type, id, extra: req.query || {} };
+        if (addonInterface.handlers.stream) {
+            const result = await addonInterface.handlers.stream(args);
+            res.json(result);
+        } else {
+            res.json({ streams: [] });
+        }
+    } catch (err) {
+        console.error('[Express] Error in stream .json endpoint:', err);
+        res.status(500).json({ streams: [] });
+    }
+});
+
+// Support for subtitles with filename parameter (from Stremio logs)
+app.get('/subtitles/:type/:id/:filename', async (req, res) => {
+    const { type, id, filename } = req.params;
+    console.log(`[Express] GET /subtitles/${type}/${id}/${filename} - Query:`, JSON.stringify(req.query, null, 2));
+    try {
+        const args = { type, id, extra: req.query || {} };
+        const result = await addonInterface.handlers.subtitles(args);
+        console.log(`[Express] Filename result:`, JSON.stringify(result, null, 2));
+        res.json(result);
+    } catch (err) {
+        console.error('[Express] Error in subtitles filename endpoint:', err);
+        res.status(500).json({ subtitles: [] });
+    }
+});
+
+// Support for subtitles with filename parameter and .json extension
+app.get('/subtitles/:type/:id/:filename.json', async (req, res) => {
+    const { type, id, filename } = req.params;
+    console.log(`[Express] GET /subtitles/${type}/${id}/${filename}.json - Query:`, JSON.stringify(req.query, null, 2));
+    try {
+        const args = { type, id, extra: req.query || {} };
+        const result = await addonInterface.handlers.subtitles(args);
+        console.log(`[Express] Filename.json result:`, JSON.stringify(result, null, 2));
+        res.json(result);
+    } catch (err) {
+        console.error('[Express] Error in subtitles filename.json endpoint:', err);
+        res.status(500).json({ subtitles: [] });
     }
 });
 
