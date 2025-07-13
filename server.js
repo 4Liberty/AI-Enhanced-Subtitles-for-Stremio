@@ -131,7 +131,7 @@ app.get('/subtitles/:videoId/:language.srt', asyncRoute(async (req, res) => {
 }));
 
 // All other requests are handled by the Stremio addon SDK.
-app.use(serveHTTP(addonInterface));
+app.use('/', serveHTTP(addonInterface));
 
 // Global error handler for uncaught errors in async routes
 app.use((err, req, res, next) => {
