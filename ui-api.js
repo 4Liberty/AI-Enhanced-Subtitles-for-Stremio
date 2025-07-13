@@ -3,7 +3,7 @@ const express = require('express');
 const path = require('path');
 const os = require('os');
 const { generateRealDebridStreams } = require('./lib/realDebridSearch');
-const { searchSubtitles } = require('./lib/subtitleSearch');
+const { getSubtitleUrlsForStremio, getAICorrectedSubtitle, getCachedSubtitleContent } = require('./lib/subtitleMatcher');
 
 // Health monitoring data
 let healthData = {
