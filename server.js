@@ -1,4 +1,8 @@
 // --- ENVIRONMENT CHECKS ---
+const express = require('express');
+const { addonBuilder, serveHTTP } = require('stremio-addon-sdk');
+const path = require('path');
+
 function checkEnvVars() {
     const missing = [];
     if (!process.env.GEMINI_API_KEY) missing.push('GEMINI_API_KEY');
@@ -11,33 +15,10 @@ function checkEnvVars() {
         console.log('[Startup] All required API keys are set.');
     }
 }
-checkEnvVars();
-// Health check endpoint for diagnostics
-app.get('/health', async (req, res) => {
-    const checks = {};
-    // Check Gemini
-    checks.gemini = !!process.env.GEMINI_API_KEY;
-    // Check OpenSubtitles
-    checks.opensubtitles = !!process.env.OPENSUBTITLES_API_KEY;
-    // Check TMDb
-    checks.tmdb = !!process.env.TMDB_API_KEY;
-    // Check SubDL
-    checks.subdl = !!process.env.SUBDL_API_KEY;
-    // Try a simple fetch to TMDb if key present
-    if (checks.tmdb) {
-        try {
-            const tmdbRes = await fetch(`https://api.themoviedb.org/3/configuration?api_key=${process.env.TMDB_API_KEY}`);
-            checks.tmdb_online = tmdbRes.ok;
-        } catch { checks.tmdb_online = false; }
-    }
-    res.json(checks);
-});
+
 // server.js
 // --- FINAL STABLE VERSION v2.9.0 ---
 
-const express = require('express');
-const { addonBuilder, serveHTTP } = require('stremio-addon-sdk');
-const path = require('path');
 const { getAICorrectedSubtitle, getSubtitleUrlsForStremio } = require('./lib/subtitleMatcher');
 const fetch = require('node-fetch');
 const { getEnrichedStreams } = require('./lib/streamEnricher');
@@ -91,6 +72,29 @@ builder.defineStreamHandler(async (args) => {
 const addonInterface = builder.getInterface();
 const app = express();
 const port = process.env.PORT || 7000;
+
+checkEnvVars();
+
+// Health check endpoint for diagnostics
+app.get('/health', async (req, res) => {
+    const checks = {};
+    // Check Gemini
+    checks.gemini = !!process.env.GEMINI_API_KEY;
+    // Check OpenSubtitles
+    checks.opensubtitles = !!process.env.OPENSUBTITLES_API_KEY;
+    // Check TMDb
+    checks.tmdb = !!process.env.TMDB_API_KEY;
+    // Check SubDL
+    checks.subdl = !!process.env.SUBDL_API_KEY;
+    // Try a simple fetch to TMDb if key present
+    if (checks.tmdb) {
+        try {
+            const tmdbRes = await fetch(`https://api.themoviedb.org/3/configuration?api_key=${process.env.TMDB_API_KEY}`);
+            checks.tmdb_online = tmdbRes.ok;
+        } catch { checks.tmdb_online = false; }
+    }
+    res.json(checks);
+});
 
 // Route for the configuration page.
 const configureRoute = (req, res) => {
