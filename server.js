@@ -7,13 +7,47 @@ const AI_SLOW_THRESHOLD_MS = 8000;
 
 const fs = require('fs');
 const express = require('express');
+
+
 const app = express();
+
+// Add CORS headers for all responses (required for Stremio addon installation)
+app.use((req, res, next) => {
+    res.setHeader('Access-Control-Allow-Origin', '*');
+    next();
+});
+
+// Serve static files from the project root (for logo.svg, logo.png, etc.)
+app.use(express.static(__dirname));
+
+// Helper to ensure absolute URLs in subtitle options
+function absolutizeSubtitleUrls(result, req) {
+    if (!result || !result.subtitles) return result;
+    const base = req.protocol + '://' + req.get('host');
+    result.subtitles = result.subtitles.map(sub => {
+        if (sub.url && sub.url.startsWith('/')) {
+            return { ...sub, url: base + sub.url };
+        }
+        return sub;
+    });
+    return result;
+}
 
 // Stremio subtitles resource endpoint (Stremio expects this for subtitle options)
 app.get('/subtitles/:type/:id.json', async (req, res) => {
     const { type, id } = req.params;
     const infoHash = req.query.hash || null;
-    const result = await getSubtitleUrlsForStremio(id, infoHash);
+    let result = await getSubtitleUrlsForStremio(id, infoHash);
+    result = absolutizeSubtitleUrls(result, req);
+    res.json(result);
+});
+
+// Also support GET /subtitles/:type/:id for maximum compatibility
+app.get('/subtitles/:type/:id', async (req, res) => {
+    const { type, id } = req.params;
+    const infoHash = req.query.hash || null;
+    let result = await getSubtitleUrlsForStremio(id, infoHash);
+    result = absolutizeSubtitleUrls(result, req);
     res.json(result);
 });
 const { addonBuilder } = require('stremio-addon-sdk');
@@ -183,11 +217,21 @@ app.get(['/health', '/health/'], async (req, res) => {
     res.json(checks);
 });
 
+
+// Catch-all 404 JSON error for unknown API routes
+app.use((req, res, next) => {
+    if (req.path.startsWith('/subtitles') || req.path.startsWith('/manifest') || req.path.startsWith('/stream')) {
+        res.status(404).json({ error: 'Not found' });
+    } else {
+        next();
+    }
+});
+
 // Global error handler
 app.use((err, req, res, next) => {
     console.error('[Global Error Handler]', err);
     if (!res.headersSent) {
-        res.status(500).send('Internal server error.');
+        res.status(500).json({ error: 'Internal server error.' });
     }
 });
 
