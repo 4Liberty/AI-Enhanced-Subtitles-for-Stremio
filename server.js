@@ -159,27 +159,4 @@ app.listen(port, () => {
 });
 
 
-// --- Express server for management endpoints (health, config, etc.) ---
-const app = express();
-const mgmtPort = process.env.MGMT_PORT || 7001;
-
-
-checkEnvVars();
-
-// Health check endpoint for diagnostics
-app.get('/health', async (req, res) => {
-    const checks = {};
-    checks.gemini = !!process.env.GEMINI_API_KEY;
-    checks.opensubtitles = !!process.env.OPENSUBTITLES_API_KEY;
-    checks.tmdb = !!process.env.TMDB_API_KEY;
-    checks.subdl = !!process.env.SUBDL_API_KEY;
-    if (checks.tmdb) {
-        try {
-            const tmdbRes = await fetch(`https://api.themoviedb.org/3/configuration?api_key=${process.env.TMDB_API_KEY}`);
-            checks.tmdb_online = tmdbRes.ok;
-        } catch { checks.tmdb_online = false; }
-    }
-    res.json(checks);
-});
-
-// Route for the configuration page.
+// ...existing code...
