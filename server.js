@@ -130,8 +130,25 @@ app.get('/subtitles/:videoId/:language.srt', asyncRoute(async (req, res) => {
     }
 }));
 
+
+// Explicit manifest route for extra robustness
+app.get('/manifest.json', (req, res) => {
+    res.setHeader('Content-Type', 'application/json');
+    res.send(JSON.stringify(addonInterface.manifest));
+});
+
 // All other requests are handled by the Stremio addon SDK.
-app.use('/', serveHTTP(addonInterface));
+const stremioMiddleware = serveHTTP(addonInterface);
+if (typeof stremioMiddleware === 'function') {
+    app.use('/', stremioMiddleware);
+} else if (stremioMiddleware && typeof stremioMiddleware.then === 'function') {
+    // If serveHTTP returns a Promise (shouldn't, but for robustness)
+    app.use('/', (req, res, next) => {
+        stremioMiddleware.then(fn => fn(req, res, next)).catch(next);
+    });
+} else {
+    throw new Error('serveHTTP(addonInterface) did not return a middleware function');
+}
 
 // Global error handler for uncaught errors in async routes
 app.use((err, req, res, next) => {
