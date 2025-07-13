@@ -21,41 +21,55 @@
 - ❌ **AI Enhancement timing out** (8s too short)
 - ❌ **Priority system needs fixing** (hash → AI → original)
 
-## Implementation Changes - NEW PRIORITY SYSTEM ✅
+## Implementation Changes - OPTIMAL 9-TIER PRIORITY SYSTEM ✅
 
-### Priority System Implementation:
-1. **PRIORITY 1: Hash-Matched Subtitles** (if infoHash provided)
-   - Best quality - exact match to torrent file
-   - Uses SubDL with torrent hash
-   - Label: "SubDL Hash-Matched Turkish"
+### Perfect Priority Order Implementation:
 
-2. **PRIORITY 2: AI-Enhanced External Subtitles**
-   - SubDL ID-based search with 30-second AI enhancement
-   - Fallback to original if AI fails/insufficient
-   - Label: "SubDL AI-Enhanced Turkish" or "SubDL Turkish (Original)"
+#### **PHASE 1: Hash-Matched Subtitles** (when infoHash provided)
+1. **SubDL Hash-Matched** - Perfect torrent sync via hash parameter
+2. **Podnapisi Hash-Matched** - Hash-based search for torrent-specific results  
+3. **OpenSubtitles Hash-Matched** - moviehash parameter for exact file matching
 
-3. **PRIORITY 3: Podnapisi with AI Enhancement** (if no SubDL)
-   - Only if SubDL completely fails
-   - AI enhancement with original fallback
-   - Label: "Podnapisi AI-Enhanced Turkish" or "Podnapisi Turkish (Original)"
+#### **PHASE 2: AI-Enhanced Subtitles** (intelligent improvement)
+4. **SubDL AI-Enhanced** - ID-based search with 30s AI synchronization
+5. **Podnapisi AI-Enhanced** - ID-based search with AI timing correction
+6. **OpenSubtitles AI-Enhanced** - ID-based search with AI enhancement
 
-4. **PRIORITY 4: OpenSubtitles AI Fallback**
-   - Last resort when all external sources fail
-   - Always available as final option
-   - Label: "OpenSubtitles AI Turkish"
+#### **PHASE 3: Original Subtitles** (reliable fallback)
+7. **SubDL Original** - Direct content without AI processing
+8. **Podnapisi Original** - Direct content without AI processing
+9. **OpenSubtitles Original** - Direct content without AI processing
 
-### Technical Improvements:
-- ✅ **AI Timeout**: Increased from 8s to 30s for complex processing
-- ✅ **Smart AI Fallback**: Returns original content instead of tiny fallbacks
-- ✅ **Quality Validation**: AI result must be ≥80% of original size
-- ✅ **Hash Support**: Proper hash-matched subtitle priority
-- ✅ **Error Handling**: Robust fallback chain with meaningful responses
+#### **FINAL FALLBACKS:**
+10. **Traditional OpenSubtitles AI** - Original getAICorrectedSubtitle function
+11. **System Fallback** - Basic subtitle when everything fails
 
-### Next Steps:
-1. Test hash-matched subtitles with torrent info
-2. Verify 30-second AI timeout works
-3. Ensure priority system works correctly
-4. Debug Podnapisi Turkish link detection
+### Priority Logic:
+- **Hash-matched subtitles take absolute priority** when infoHash is available
+- **AI enhancement is attempted only after hash-matching fails**
+- **Original subtitles serve as last resort** before system fallbacks
+- **Each phase is exhausted completely** before moving to next phase
+- **Sources are tried in order**: SubDL → Podnapisi → OpenSubtitles
+
+### Technical Implementation:
+- ✅ **Hash Support**: All three sources support hash-based matching
+- ✅ **AI Timeout**: 30-second timeout for complex AI processing
+- ✅ **Smart Fallbacks**: Original content preserved when AI fails
+- ✅ **Quality Validation**: AI results must be ≥80% of original size
+- ✅ **Source Labeling**: Clear indication of processing type and source
+- ✅ **Caching System**: Optimized caching for all subtitle types
+
+### Benefits:
+- **Maximum Success Rate**: 11 different fallback levels ensure subtitle availability
+- **Optimal Quality**: Hash-matched subtitles provide perfect synchronization
+- **Intelligent Processing**: AI enhancement only when beneficial
+- **Performance**: Efficient priority order minimizes unnecessary API calls
+- **User Experience**: Clear labeling shows subtitle quality and source
+
+### Legacy Clarification:
+- **"Traditional OpenSubtitles AI"** refers to the original getAICorrectedSubtitle function
+- **No longer "legacy"** - it's the final specialized fallback for OpenSubtitles
+- **Maintains backward compatibility** with existing functionality
 
 ## How to Test
 

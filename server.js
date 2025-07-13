@@ -175,8 +175,12 @@ app.get('/subtitles/:videoId/:language.srt', async (req, res) => {
     
     console.log(`[SRT Endpoint] Subtitle file request. Video ID: ${videoId}, Lang: ${language}, Hash: ${hash}, Test: ${test}, Fallback: ${fallback}, Source: ${source}`);
 
-    // If we have a specific source (subdl, podnapisi), serve the cached content
-    if (source && (source === 'subdl' || source === 'podnapisi' || source === 'subdl-original' || source === 'podnapisi-original' || source === 'subdl-error' || source === 'subdl-hash' || source === 'subdl-ai' || source === 'podnapisi-ai')) {
+    // If we have a specific source (subdl, podnapisi, opensubtitles), serve the cached content
+    if (source && (source === 'subdl' || source === 'podnapisi' || source === 'opensubtitles' || 
+                   source === 'subdl-original' || source === 'podnapisi-original' || source === 'opensubtitles-original' || 
+                   source === 'subdl-error' || source === 'subdl-hash' || source === 'subdl-ai' || 
+                   source === 'podnapisi-ai' || source === 'podnapisi-hash' || 
+                   source === 'opensubtitles-ai' || source === 'opensubtitles-hash')) {
         const cachedContent = getCachedSubtitleContent(videoId, source);
         if (cachedContent) {
             console.log(`[SRT Endpoint] Serving cached ${source} subtitle for ${videoId}`);
