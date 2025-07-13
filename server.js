@@ -162,11 +162,6 @@ app.get('/manifest.json', (req, res) => {
     res.send(JSON.stringify(addonInterface.manifest, null, 2));
 });
 
-// Handle Stremio's URL-encoded manifest requests
-app.get('/addon/manifest.json', (req, res) => {
-    res.redirect(301, '/manifest.json');
-});
-
 // Subtitles resource endpoints that Stremio expects (using SDK handlers)
 app.post('/subtitles/:type/:id', express.json(), async (req, res) => {
     const { type, id } = req.params;
