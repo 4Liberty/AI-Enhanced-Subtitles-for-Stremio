@@ -210,6 +210,26 @@ app.use((req, res, next) => {
 // Add JSON body parsing
 app.use(express.json());
 
+// Add server timeout configuration for longer subtitle processing
+app.use((req, res, next) => {
+    // Set timeout to 60 seconds for subtitle processing
+    req.setTimeout(60000, () => {
+        console.log(`[Timeout] Request timeout for ${req.method} ${req.path}`);
+        if (!res.headersSent) {
+            res.status(408).json({ error: 'Request timeout' });
+        }
+    });
+    
+    res.setTimeout(60000, () => {
+        console.log(`[Timeout] Response timeout for ${req.method} ${req.path}`);
+        if (!res.headersSent) {
+            res.status(408).json({ error: 'Response timeout' });
+        }
+    });
+    
+    next();
+});
+
 // Add request logging middleware to see all incoming requests
 app.use((req, res, next) => {
     console.log(`[Request] ${req.method} ${req.path} - Headers: ${JSON.stringify(req.headers)}`);
@@ -317,10 +337,10 @@ VideoId: ${videoId}
     }
 
     // If fallback mode, provide a basic subtitle
-    if (fallback === 'true') {
+    if (fallback === 'true' || fallback === 'traditional') {
         const fallbackSubtitle = `1
 00:00:01,000 --> 00:00:05,000
-Basic Turkish subtitle
+Turkish subtitle loading...
 
 2
 00:00:06,000 --> 00:00:10,000
@@ -328,7 +348,11 @@ Subtitle for ${videoId}
 
 3
 00:00:11,000 --> 00:00:15,000
-No external subtitle sources available
+Searching external subtitle sources...
+
+4
+00:00:16,000 --> 00:00:20,000
+Please wait while we find subtitles
 `;
         res.setHeader('Content-Type', 'text/plain; charset=utf-8');
         res.setHeader('Content-Disposition', `attachment; filename="${videoId}_${language}.srt"`);
