@@ -1,0 +1,3 @@
+@echo off
+echo Starting Stremio Addon Server...
+node server.js
