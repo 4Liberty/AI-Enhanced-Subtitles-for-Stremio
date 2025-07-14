@@ -4,10 +4,9 @@
 const express = require('express');
 const { addonBuilder, serveHTTP } = require('stremio-addon-sdk');
 const path = require('path');
-const { getAICorrectedSubtitle, getSubtitleUrlsForStremio } = require('./lib/subtitleMatcher');
+const { getAICorrectedSubtitle, getSubtitleUrlsForStremio, getCachedSubtitleContent, getProgressiveSubtitleContent, getAiEnhancementStatus } = require('./lib/subtitleMatcher');
 const { streamEnricher } = require('./lib/streamEnricher');
-const { generateRealDebridStreams, generateSampleRealDebridStreams } = require('./lib/realDebridSearch');
-const { initializeStreamingProviders } = require('./lib/streamingProviderManager');
+const { initializeStreamingProviders, streamingManager } = require('./lib/streamingProviderManager');
 const { setupUIRoutes } = require('./ui-api');
 
 console.log("Starting Stremio AI Subtitle Addon v2.9.1 with Beautiful UI...");
@@ -173,6 +172,19 @@ if (!process.env.ALL_DEBRID_API_KEY) {
 // Run environment variable validation
 validateEnvironmentVariables();
 
+// Initialize streaming providers
+console.log("Initializing streaming providers...");
+initializeStreamingProviders({
+    realdebrid: {
+        enabled: !!process.env.REAL_DEBRID_API_KEY,
+        apiKey: process.env.REAL_DEBRID_API_KEY
+    },
+    alldebrid: {
+        enabled: !!process.env.ALL_DEBRID_API_KEY,
+        apiKey: process.env.ALL_DEBRID_API_KEY
+    }
+});
+
 console.log("\n🎨 Beautiful UI will be available at: http://localhost:7000/ui");
 console.log("📊 Advanced health monitoring and settings included!");
 
@@ -275,11 +287,10 @@ const streamHandler = async (args) => {
     
     const streams = [];
     
-    // PRIORITY 1: Enhanced Real-Debrid cached streams with MediaFusion architecture
-    if (process.env.REAL_DEBRID_API_KEY && movieId.startsWith('tt')) {
-        console.log(`[Handler] Searching Real-Debrid with enhanced MediaFusion architecture...`);
+    // Use enhanced MediaFusion architecture via streamingProviderManager
+    if (movieId.startsWith('tt')) {
+        console.log(`[Handler] Searching with enhanced MediaFusion architecture...`);
         try {
-            // Use enhanced streaming provider manager
             const cachedSearch = await streamingManager.searchCachedContent(movieId, {
                 type: 'movie',
                 maxResults: 20
@@ -306,9 +317,8 @@ const streamHandler = async (args) => {
                                 peers: 50,
                                 behaviorHints: {
                                     notWebReady: !enrichedStream.streaming?.streamUrl,
-                                    realDebrid: true,
                                     cached: enrichedStream.streaming?.cached || false,
-                                    provider: enrichedStream.streaming?.provider || 'real-debrid'
+                                    provider: enrichedStream.streaming?.provider || 'multi-debrid'
                                 },
                                 infoHash: result.hash || result.id,
                                 filesize: enrichedStream.size || result.size,
@@ -318,52 +328,22 @@ const streamHandler = async (args) => {
                     }
                 }
             } else {
-                console.log(`[Handler] No cached streams found, using fallback Real-Debrid search`);
-                // Fallback to original Real-Debrid search
-                const rdStreams = await generateRealDebridStreams(movieId, 'movie');
-                if (rdStreams && rdStreams.length > 0) {
-                    console.log(`[Handler] Found ${rdStreams.length} Real-Debrid fallback streams`);
-                    // Enrich fallback streams
-                    const enrichedFallback = await streamEnricher.enrichStreams(rdStreams, {
-                        preferredProvider: 'realdebrid'
-                    });
-                    streams.push(...enrichedFallback);
-                } else {
-                    console.log(`[Handler] No Real-Debrid streams found, using samples`);
-                    // Add sample Real-Debrid streams for demonstration
-                    const sampleRdStreams = generateSampleRealDebridStreams(movieId);
-                    const enrichedSamples = await streamEnricher.enrichStreams(sampleRdStreams, {
-                        preferredProvider: 'realdebrid'
-                    });
-                    streams.push(...enrichedSamples);
-                }
+                console.log(`[Handler] No cached streams found via MediaFusion architecture`);
             }
         } catch (e) {
-            console.error(`[Handler] Enhanced Real-Debrid search error:`, e);
-            
-            // Fallback to original implementation
-            try {
-                const rdStreams = await generateRealDebridStreams(movieId, 'movie');
-                if (rdStreams && rdStreams.length > 0) {
-                    console.log(`[Handler] Fallback: Found ${rdStreams.length} Real-Debrid streams`);
-                    streams.push(...rdStreams);
-                }
-            } catch (fallbackError) {
-                console.error(`[Handler] Fallback Real-Debrid search also failed:`, fallbackError);
-            }
+            console.error(`[Handler] MediaFusion search error:`, e);
         }
     }
     
-    // PRIORITY 2: Hash-based subtitle matching streams (for non-Real-Debrid users)
-    const sampleHashes = [
-        { title: 'Hash-Match 1080p', infoHash: '3a4b5c6d7e8f9a0b1c2d3e4f5a6b7c8d9e0f1a2b', quality: '1080p' },
-        { title: 'Hash-Match 720p', infoHash: '1a2b3c4d5e6f7a8b9c0d1e2f3a4b5c6d7e8f9a0b', quality: '720p' },
-        { title: 'Hash-Match 4K', infoHash: '9a0b1c2d3e4f5a6b7c8d9e0f1a2b3c4d5e6f7a8b', quality: '4K' }
-    ];
-    
-    // Add hash-matching streams only if no Real-Debrid streams
+    // Fallback: Hash-based subtitle matching streams for better subtitle synchronization
     if (streams.length === 0) {
-        console.log(`[Handler] No Real-Debrid streams, providing hash-matching streams for subtitle sync`);
+        console.log(`[Handler] No streams found, providing hash-matching streams for subtitle sync`);
+        
+        const sampleHashes = [
+            { title: 'Hash-Match 1080p', infoHash: '3a4b5c6d7e8f9a0b1c2d3e4f5a6b7c8d9e0f1a2b', quality: '1080p' },
+            { title: 'Hash-Match 720p', infoHash: '1a2b3c4d5e6f7a8b9c0d1e2f3a4b5c6d7e8f9a0b', quality: '720p' },
+            { title: 'Hash-Match 4K', infoHash: '9a0b1c2d3e4f5a6b7c8d9e0f1a2b3c4d5e6f7a8b', quality: '4K' }
+        ];
         
         for (const sample of sampleHashes) {
             streams.push({
@@ -374,7 +354,7 @@ const streamHandler = async (args) => {
                 peers: 1,
                 behaviorHints: {
                     notWebReady: true,
-                    hashOnly: true, // These are only for hash-based subtitle matching
+                    hashOnly: true,
                     subtitleMatch: true
                 },
                 infoHash: sample.infoHash
@@ -382,7 +362,7 @@ const streamHandler = async (args) => {
         }
     }
     
-    console.log(`[Handler] Providing ${streams.length} total streams (${streams.filter(s => s.behaviorHints?.realDebrid).length} Real-Debrid cached)`);
+    console.log(`[Handler] Providing ${streams.length} total streams`);
     
     return { streams };
 };
@@ -771,562 +751,23 @@ app.get('/health', async (req, res) => {
     res.json(checks);
 });
 
-// Enhanced health monitoring endpoints with MediaFusion architecture
-app.get('/api/health', async (req, res) => {
-    try {
-        const healthData = {
-            status: 'ok',
-            timestamp: new Date().toISOString(),
-            services: {
-                gemini: !!process.env.GEMINI_API_KEY,
-                opensubtitles: !!process.env.OPENSUBTITLES_API_KEY,
-                tmdb: !!process.env.TMDB_API_KEY,
-                subdl: !!process.env.SUBDL_API_KEY,
-                realdebrid: !!process.env.REAL_DEBRID_API_KEY,
-                alldebrid: !!process.env.ALL_DEBRID_API_KEY
-            },
-            streaming: {
-                providers: streamingManager.getAvailableProviders(),
-                health: await streamingManager.healthCheck()
-            }
-        };
-
-        // Check external services
-        if (healthData.services.tmdb) {
-            try {
-                const fetch = require('node-fetch');
-                const tmdbRes = await fetch(`https://api.themoviedb.org/3/configuration?api_key=${process.env.TMDB_API_KEY}`, {
-                    timeout: 5000
-                });
-                healthData.services.tmdb_online = tmdbRes.ok;
-            } catch { 
-                healthData.services.tmdb_online = false; 
-            }
-        }
-
-        res.json(healthData);
-    } catch (error) {
-        res.status(500).json({
-            status: 'error',
-            timestamp: new Date().toISOString(),
-            error: error.message
-        });
-    }
-});
-
-// Provider status endpoint
-app.get('/api/providers/status', async (req, res) => {
-    try {
-        const stats = await streamingManager.getCacheStats();
-        res.json({
-            success: true,
-            timestamp: new Date().toISOString(),
-            providers: stats
-        });
-    } catch (error) {
-        res.status(500).json({
-            success: false,
-            timestamp: new Date().toISOString(),
-            error: error.message
-        });
-    }
-});
-
-// Provider health check endpoint
-app.get('/api/providers/health', async (req, res) => {
-    try {
-        const health = await streamingManager.healthCheck();
-        res.json({
-            success: true,
-            timestamp: new Date().toISOString(),
-            health
-        });
-    } catch (error) {
-        res.status(500).json({
-            success: false,
-            timestamp: new Date().toISOString(),
-            error: error.message
-        });
-    }
-});
-
-// Search cached content endpoint
-app.get('/api/search/cached', async (req, res) => {
-    try {
-        const { query, type = 'movie', maxResults = 20 } = req.query;
-        
-        if (!query) {
-            return res.status(400).json({
-                success: false,
-                error: 'Query parameter is required'
-            });
-        }
-
-        const results = await streamingManager.searchCachedContent(query, {
-            type,
-            maxResults: parseInt(maxResults)
-        });
-
-        res.json({
-            success: true,
-            timestamp: new Date().toISOString(),
-            query,
-            type,
-            ...results
-        });
-    } catch (error) {
-        res.status(500).json({
-            success: false,
-            timestamp: new Date().toISOString(),
-            error: error.message
-        });
-    }
-});
-
-// Stream enrichment endpoint
-app.post('/api/streams/enrich', async (req, res) => {
-    try {
-        const { streams, options = {} } = req.body;
-        
-        if (!streams || !Array.isArray(streams)) {
-            return res.status(400).json({
-                success: false,
-                error: 'Streams array is required'
-            });
-        }
-
-        const enrichedStreams = await streamEnricher.enrichStreams(streams, options);
-
-        res.json({
-            success: true,
-            timestamp: new Date().toISOString(),
-            enriched: enrichedStreams.length,
-            streams: enrichedStreams
-        });
-    } catch (error) {
-        res.status(500).json({
-            success: false,
-            timestamp: new Date().toISOString(),
-            error: error.message
-        });
-    }
-});
-
-// AllDebrid-specific endpoints
-app.get('/api/health/alldebrid', async (req, res) => {
-    try {
-        const hasApiKey = !!process.env.ALL_DEBRID_API_KEY;
-        
-        if (!hasApiKey) {
-            return res.json({
-                status: 'error',
-                message: 'AllDebrid API key not configured',
-                enabled: false
-            });
-        }
-
-        const providers = streamingManager.getAvailableProviders();
-        const isEnabled = providers.includes('alldebrid');
-
-        if (!isEnabled) {
-            return res.json({
-                status: 'warning',
-                message: 'AllDebrid provider not enabled',
-                enabled: false
-            });
-        }
-
-        // Test AllDebrid connection
-        const { AllDebridClient } = require('./lib/allDebridClient');
-        const client = new AllDebridClient(process.env.ALL_DEBRID_API_KEY);
-        const userInfo = await client.getAccountInfo();
-
-        if (userInfo) {
-            res.json({
-                status: 'healthy',
-                message: 'AllDebrid service operational',
-                enabled: true,
-                user: userInfo.username,
-                premium: userInfo.premium,
-                expiration: userInfo.expiration
-            });
-        } else {
-            res.json({
-                status: 'error',
-                message: 'AllDebrid authentication failed',
-                enabled: false
-            });
-        }
-    } catch (error) {
-        res.status(500).json({
-            status: 'error',
-            message: error.message,
-            enabled: false
-        });
-    }
-});
-
-app.get('/api/alldebrid/status', async (req, res) => {
-    try {
-        const hasApiKey = !!process.env.ALL_DEBRID_API_KEY;
-        
-        if (!hasApiKey) {
-            return res.json({
-                enabled: false,
-                message: 'AllDebrid API key not configured'
-            });
-        }
-
-        const { AllDebridClient } = require('./lib/allDebridClient');
-        const client = new AllDebridClient(process.env.ALL_DEBRID_API_KEY);
-        const userInfo = await client.getAccountInfo();
-
-        res.json({
-            enabled: !!userInfo,
-            user: userInfo?.username || 'Unknown',
-            premium: userInfo?.premium || false,
-            expiration: userInfo?.expiration || 'Unknown',
-            message: userInfo ? 'Connected' : 'Authentication failed'
-        });
-    } catch (error) {
-        res.status(500).json({
-            enabled: false,
-            message: error.message
-        });
-    }
-});
-
-// Performance monitoring
-let performanceMetrics = {
-    startTime: Date.now(),
-    requestCount: 0,
-    successCount: 0,
-    failureCount: 0,
-    responseTimes: [],
-    memoryUsage: [],
-    cpuUsage: [],
-    connections: 0
-};
-
-// Middleware to track performance
-app.use((req, res, next) => {
-    const startTime = Date.now();
-    performanceMetrics.requestCount++;
-    performanceMetrics.connections++;
-    
-    res.on('finish', () => {
-        const responseTime = Date.now() - startTime;
-        performanceMetrics.responseTimes.push(responseTime);
-        
-        // Keep only last 100 response times
-        if (performanceMetrics.responseTimes.length > 100) {
-            performanceMetrics.responseTimes.shift();
-        }
-        
-        if (res.statusCode >= 200 && res.statusCode < 400) {
-            performanceMetrics.successCount++;
-        } else {
-            performanceMetrics.failureCount++;
-        }
-        
-        performanceMetrics.connections--;
-    });
-    
-    next();
-});
-
-// Performance metrics endpoint
-app.get('/api/performance/metrics', (req, res) => {
-    try {
-        const memUsage = process.memoryUsage();
-        const cpuUsage = process.cpuUsage();
-        const uptime = process.uptime();
-        
-        // Calculate averages
-        const avgResponseTime = performanceMetrics.responseTimes.length > 0 
-            ? performanceMetrics.responseTimes.reduce((a, b) => a + b, 0) / performanceMetrics.responseTimes.length 
-            : 0;
-        
-        const successRate = performanceMetrics.requestCount > 0 
-            ? (performanceMetrics.successCount / performanceMetrics.requestCount) * 100 
-            : 0;
-        
-        const metrics = {
-            uptime: uptime,
-            memory: {
-                rss: Math.round(memUsage.rss / 1024 / 1024), // MB
-                heapUsed: Math.round(memUsage.heapUsed / 1024 / 1024), // MB
-                heapTotal: Math.round(memUsage.heapTotal / 1024 / 1024), // MB
-                external: Math.round(memUsage.external / 1024 / 1024) // MB
-            },
-            cpu: {
-                user: cpuUsage.user / 1000, // milliseconds to seconds
-                system: cpuUsage.system / 1000 // milliseconds to seconds
-            },
-            requests: {
-                total: performanceMetrics.requestCount,
-                success: performanceMetrics.successCount,
-                failure: performanceMetrics.failureCount,
-                successRate: Math.round(successRate * 100) / 100
-            },
-            performance: {
-                averageResponseTime: Math.round(avgResponseTime * 100) / 100,
-                activeConnections: performanceMetrics.connections,
-                recentResponseTimes: performanceMetrics.responseTimes.slice(-10)
-            }
-        };
-        
-        res.json(metrics);
-    } catch (error) {
-        res.status(500).json({ error: 'Failed to get performance metrics' });
-    }
-});
-
-// Environment status endpoint
-app.get('/api/environment/status', (req, res) => {
-    try {
-        const envStatus = {
-            gemini: {
-                available: !!process.env.GEMINI_API_KEY,
-                configured: !!process.env.GEMINI_API_KEY
-            },
-            openai: {
-                available: !!process.env.OPENAI_API_KEY,
-                configured: !!process.env.OPENAI_API_KEY
-            },
-            realDebrid: {
-                available: !!process.env.REAL_DEBRID_API_KEY,
-                configured: !!process.env.REAL_DEBRID_API_KEY
-            },
-            premiumize: {
-                available: !!process.env.PREMIUMIZE_API_KEY,
-                configured: !!process.env.PREMIUMIZE_API_KEY
-            },
-            opensubtitles: {
-                available: !!process.env.OPENSUBTITLES_API_KEY,
-                configured: !!process.env.OPENSUBTITLES_API_KEY
-            },
-            subdl: {
-                available: !!process.env.SUBDL_API_KEY,
-                configured: !!process.env.SUBDL_API_KEY
-            },
-            database: {
-                available: true,
-                configured: true
-            }
-        };
-        
-        res.json(envStatus);
-    } catch (error) {
-        console.error('Environment status error:', error);
-        res.status(500).json({
-            error: 'Failed to retrieve environment status',
-            details: error.message
-        });
-    }
-});
-
-// Dashboard API endpoint for UI
-app.get('/api/dashboard', async (req, res) => {
-    try {
-        const uptime = process.uptime();
-        const memUsage = process.memoryUsage();
-        
-        // Get performance metrics
-        const avgResponseTime = performanceMetrics.responseTimes.length > 0 
-            ? performanceMetrics.responseTimes.reduce((a, b) => a + b, 0) / performanceMetrics.responseTimes.length 
-            : 0;
-        
-        const successRate = performanceMetrics.requestCount > 0 
-            ? (performanceMetrics.successCount / performanceMetrics.requestCount) * 100 
-            : 0;
-        
-        // Count active providers
-        const activeProviders = [
-            !!process.env.OPENSUBTITLES_API_KEY,
-            !!process.env.SUBDL_API_KEY,
-            !!process.env.REAL_DEBRID_API_KEY,
-            !!process.env.ALL_DEBRID_API_KEY,
-            !!process.env.GEMINI_API_KEY
-        ].filter(Boolean).length;
-        
-        const dashboardData = {
-            status: 'online',
-            uptime: uptime,
-            subtitlesProcessed: performanceMetrics.successCount || 0,
-            torrentsFound: 0, // This would be populated from actual torrent searches
-            activeProviders: activeProviders,
-            performance: {
-                responseTime: Math.round(avgResponseTime * 100) / 100,
-                successRate: Math.round(successRate * 100) / 100,
-                memoryUsage: Math.round(memUsage.heapUsed / 1024 / 1024), // MB
-                activeConnections: performanceMetrics.connections || 0
-            },
-            services: {
-                opensubtitles: !!process.env.OPENSUBTITLES_API_KEY,
-                subdl: !!process.env.SUBDL_API_KEY,
-                gemini: !!process.env.GEMINI_API_KEY,
-                realdebrid: !!process.env.REAL_DEBRID_API_KEY,
-                alldebrid: !!process.env.ALL_DEBRID_API_KEY,
-                tmdb: !!process.env.TMDB_API_KEY
-            }
-        };
-        
-        res.json(dashboardData);
-    } catch (error) {
-        console.error('Dashboard API error:', error);
-        res.status(500).json({ 
-            error: 'Failed to get dashboard data',
-            status: 'error'
-        });
-    }
-});
-
-// Enhanced configuration endpoint with environment fallback
-app.get('/api/config', (req, res) => {
-    try {
-        const userConfig = getUserConfig();
-        const envConfig = {
-            realdebrid: process.env.REALDEBRID_API_KEY || '',
-            alldebrid: process.env.ALLDEBRID_API_KEY || '',
-            opensubtitles: process.env.OPENSUBTITLES_API_KEY || ''
-        };
-        
-        // Merge user config with environment fallback
-        const config = {
-            realdebrid: userConfig.realdebrid || envConfig.realdebrid,
-            alldebrid: userConfig.alldebrid || envConfig.alldebrid,
-            opensubtitles: userConfig.opensubtitles || envConfig.opensubtitles,
-            preferredProvider: userConfig.preferredProvider || 'auto',
-            fallbackMode: userConfig.fallbackMode !== undefined ? userConfig.fallbackMode : true,
-            performanceMonitoring: userConfig.performanceMonitoring !== undefined ? userConfig.performanceMonitoring : true,
-            sources: {
-                realdebrid: userConfig.realdebrid ? 'user' : (envConfig.realdebrid ? 'environment' : 'none'),
-                alldebrid: userConfig.alldebrid ? 'user' : (envConfig.alldebrid ? 'environment' : 'none'),
-                opensubtitles: userConfig.opensubtitles ? 'user' : (envConfig.opensubtitles ? 'environment' : 'none')
-            }
-        };
-        
-        res.json(config);
-    } catch (error) {
-        res.status(500).json({ error: 'Failed to get configuration' });
-    }
-});
-
-// User configuration management
-let userConfig = {
-    realdebrid: '',
-    alldebrid: '',
-    opensubtitles: '',
-    preferredProvider: 'auto',
-    fallbackMode: true,
-    performanceMonitoring: true
-};
-
-function getUserConfig() {
-    return userConfig;
-}
-
-function saveUserConfig(config) {
-    userConfig = { ...userConfig, ...config };
-    console.log('[Config] User configuration updated');
-    return userConfig;
-}
-
-// Settings endpoint
-app.get('/api/settings', (req, res) => {
-    try {
-        res.json({
-            settings: {
-                aiProvider: process.env.AI_PROVIDER || 'gemini',
-                aiModel: process.env.AI_MODEL || 'gemini-pro',
-                correctionIntensity: parseInt(process.env.CORRECTION_INTENSITY || '50'),
-                aiTemperature: parseFloat(process.env.AI_TEMPERATURE || '0.7'),
-                primaryLanguage: process.env.PRIMARY_LANGUAGE || 'tr',
-                fallbackLanguage: process.env.FALLBACK_LANGUAGE || 'en',
-                autoTranslate: process.env.AUTO_TRANSLATE === 'true',
-                hearingImpaired: process.env.HEARING_IMPAIRED === 'true',
-                aiEnabled: process.env.AI_ENABLED !== 'false',
-                debugMode: process.env.DEBUG_MODE === 'true',
-                scrapingEnabled: process.env.SCRAPING_ENABLED !== 'false',
-                cacheEnabled: process.env.CACHE_ENABLED !== 'false',
-                maxConcurrentRequests: parseInt(process.env.MAX_CONCURRENT_REQUESTS || '5'),
-                requestTimeout: parseInt(process.env.REQUEST_TIMEOUT || '30'),
-                minSubtitleScore: parseFloat(process.env.MIN_SUBTITLE_SCORE || '0.7')
-            },
-            status: 'success'
-        });
-    } catch (error) {
-        console.error('Settings retrieval error:', error);
-        res.status(500).json({
-            error: 'Failed to retrieve settings',
-            details: error.message
-        });
-    }
-});
-
-// Settings update endpoint
-app.post('/api/settings', express.json(), (req, res) => {
-    try {
-        const { settings } = req.body;
-        
-        if (!settings || typeof settings !== 'object') {
-            return res.status(400).json({
-                error: 'Invalid settings format'
-            });
-        }
-        
-        // Update settings in memory (in production, you might want to persist these)
-        Object.entries(settings).forEach(([key, value]) => {
-            if (value !== undefined && value !== null) {
-                const envKey = key.replace(/([A-Z])/g, '_$1').toUpperCase();
-                process.env[envKey] = String(value);
-            }
-        });
-        
-        res.json({
-            success: true,
-            message: 'Settings updated successfully',
-            settings: settings
-        });
-    } catch (error) {
-        console.error('Settings update error:', error);
-        res.status(500).json({
-            error: 'Failed to update settings',
-            details: error.message
-        });
-    }
-});
-
 app.listen(port, () => {
-    console.log(`\n🚀 Stremio AI Subtitle & Enhanced Real-Debrid Addon is running!`);
+    console.log(`\n🚀 Stremio AI Subtitle & Enhanced Multi-Debrid Addon is running!`);
     console.log(`📍 Main URL: http://0.0.0.0:${port}`);
     console.log(`🎨 Beautiful UI: http://0.0.0.0:${port}/ui`);
     console.log(`📋 Manifest: http://0.0.0.0:${port}/manifest.json`);
     console.log(`💚 Health: http://0.0.0.0:${port}/health`);
     console.log(`⚙️  Configure: http://0.0.0.0:${port}/configure`);
     console.log(`📝 Subtitle .srt: http://0.0.0.0:${port}/subtitles/:videoId/:language.srt`);
-    console.log(`\n🔧 Enhanced API Endpoints:`);
-    console.log(`   • /api/health - Comprehensive health monitoring`);
-    console.log(`   • /api/providers/status - Provider cache statistics`);
-    console.log(`   • /api/providers/health - Provider health check`);
-    console.log(`   • /api/search/cached - Search cached content`);
-    console.log(`   • /api/streams/enrich - Stream enrichment service`);
-    console.log(`   • /api/health/alldebrid - AllDebrid health check`);
-    console.log(`   • /api/alldebrid/status - AllDebrid status`);
-    console.log(`   • /api/performance/metrics - Performance metrics`);
-    console.log(`   • /api/environment/status - Environment status`);
-    console.log(`   • /api/config - Enhanced configuration`);
-    console.log(`   • /api/dashboard - Dashboard data for UI`);
-    console.log(`\n✨ Features available:`);
+    console.log(`\n✨ Core Features:`);
     console.log(`   • AI-powered subtitle correction with Google Gemini`);
-    console.log(`   • Enhanced Real-Debrid with MediaFusion architecture`);
+    console.log(`   • Enhanced Multi-Debrid with MediaFusion architecture`);
     console.log(`   • Advanced stream enrichment and quality detection`);
-    console.log(`   • Multi-provider streaming with fallback support`);
+    console.log(`   • Hash-based subtitle synchronization`);
     console.log(`   • Comprehensive health monitoring & performance metrics`);
     console.log(`   • Beautiful modern UI with comprehensive settings`);
-    console.log(`   • Real-time system status & error tracking`);
-    console.log(`\n🔗 Open http://localhost:${port}/ui to access the control panel!`);
+    console.log(`\n📊 All UI-related endpoints moved to ui-api.js for better organization`);
+    console.log(`🔗 Open http://localhost:${port}/ui to access the control panel!`);
 });
 
 // Graceful shutdown handling
@@ -1334,8 +775,8 @@ process.on('SIGTERM', () => {
     console.log('\n🛑 SIGTERM received, shutting down gracefully...');
     
     // Clean up resources
-    if (performanceMetrics) {
-        performanceMetrics.connections = 0;
+    if (streamingManager) {
+        console.log('Cleaning up streaming manager...');
     }
     
     // Exit gracefully
@@ -1346,8 +787,8 @@ process.on('SIGINT', () => {
     console.log('\n🛑 SIGINT received, shutting down gracefully...');
     
     // Clean up resources
-    if (performanceMetrics) {
-        performanceMetrics.connections = 0;
+    if (streamingManager) {
+        console.log('Cleaning up streaming manager...');
     }
     
     // Exit gracefully

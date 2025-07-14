@@ -4,6 +4,8 @@ const path = require('path');
 const os = require('os');
 const { generateRealDebridStreams } = require('./lib/realDebridSearch');
 const { getSubtitleUrlsForStremio, getAICorrectedSubtitle, getCachedSubtitleContent } = require('./lib/subtitleMatcher');
+const { streamingManager } = require('./lib/streamingProviderManager');
+const { streamEnricher } = require('./lib/streamEnricher');
 
 // Health monitoring data
 let healthData = {
@@ -17,6 +19,26 @@ let healthData = {
     torrentsFound: 0,
     errors: []
 };
+
+// User configuration management
+let userConfig = {
+    realdebrid: '',
+    alldebrid: '',
+    opensubtitles: '',
+    preferredProvider: 'auto',
+    fallbackMode: true,
+    performanceMonitoring: true
+};
+
+function getUserConfig() {
+    return userConfig;
+}
+
+function saveUserConfig(config) {
+    userConfig = { ...userConfig, ...config };
+    console.log('[Config] User configuration updated');
+    return userConfig;
+}
 
 // Performance monitoring middleware
 function performanceMonitor(req, res, next) {
@@ -464,214 +486,469 @@ function setupUIRoutes(app) {
         }
     }
 
-    // Health detailed endpoint
-    app.get('/api/health/detailed', async (req, res) => {
+    // Enhanced health monitoring endpoints with MediaFusion architecture
+    app.get('/api/health', async (req, res) => {
         try {
-            const checks = [
-                { name: 'Subtitle Services', status: 'healthy', message: 'All operational' },
-                { name: 'Real-Debrid API', status: 'healthy', message: 'Connected' },
-                { name: 'Torrent Providers', status: 'healthy', message: '12 active' },
-                { name: 'AI Services', status: 'healthy', message: 'Gemini connected' },
-                { name: 'Cache System', status: 'healthy', message: 'Operational' }
-            ];
+            const healthData = {
+                status: 'ok',
+                timestamp: new Date().toISOString(),
+                services: {
+                    gemini: !!process.env.GEMINI_API_KEY,
+                    opensubtitles: !!process.env.OPENSUBTITLES_API_KEY,
+                    tmdb: !!process.env.TMDB_API_KEY,
+                    subdl: !!process.env.SUBDL_API_KEY,
+                    realdebrid: !!process.env.REAL_DEBRID_API_KEY,
+                    alldebrid: !!process.env.ALL_DEBRID_API_KEY
+                },
+                streaming: {
+                    providers: streamingManager.getAvailableProviders(),
+                    health: await streamingManager.healthCheck()
+                }
+            };
 
-            const overallScore = 85;
-            const apis = '4/5';
-            const services = '5/5';
-            const providers = '12/15';
+            // Check external services
+            if (healthData.services.tmdb) {
+                try {
+                    const fetch = require('node-fetch');
+                    const tmdbRes = await fetch(`https://api.themoviedb.org/3/configuration?api_key=${process.env.TMDB_API_KEY}`, {
+                        timeout: 5000
+                    });
+                    healthData.services.tmdb_online = tmdbRes.ok;
+                } catch { 
+                    healthData.services.tmdb_online = false; 
+                }
+            }
 
+            res.json(healthData);
+        } catch (error) {
+            res.status(500).json({
+                status: 'error',
+                timestamp: new Date().toISOString(),
+                error: error.message
+            });
+        }
+    });
+
+    // Provider status endpoint
+    app.get('/api/providers/status', async (req, res) => {
+        try {
+            const stats = await streamingManager.getCacheStats();
             res.json({
-                overallScore,
-                apis,
-                services,
-                providers,
-                checks,
-                errors: healthData.errors || []
+                success: true,
+                timestamp: new Date().toISOString(),
+                providers: stats
             });
         } catch (error) {
-            res.status(500).json({ error: 'Failed to get detailed health' });
+            res.status(500).json({
+                success: false,
+                timestamp: new Date().toISOString(),
+                error: error.message
+            });
         }
     });
 
-    // Test subtitle search endpoint
-    app.post('/api/test/subtitle', express.json(), async (req, res) => {
+    // Provider health check endpoint
+    app.get('/api/providers/health', async (req, res) => {
         try {
-            const { imdbId, language } = req.body;
-            
-            if (!imdbId) {
-                return res.status(400).json({ error: 'IMDb ID is required' });
-            }
-
-            const result = await getSubtitleUrlsForStremio(imdbId);
-            res.json(result || { subtitles: [] });
+            const health = await streamingManager.healthCheck();
+            res.json({
+                success: true,
+                timestamp: new Date().toISOString(),
+                health
+            });
         } catch (error) {
-            console.error('Test subtitle error:', error);
-            res.status(500).json({ error: 'Test failed: ' + error.message });
+            res.status(500).json({
+                success: false,
+                timestamp: new Date().toISOString(),
+                error: error.message
+            });
         }
     });
 
-    // Test torrent search endpoint
-    app.post('/api/test/torrent', express.json(), async (req, res) => {
+    // Search cached content endpoint
+    app.get('/api/search/cached', async (req, res) => {
         try {
-            const { imdbId, quality } = req.body;
+            const { query, type = 'movie', maxResults = 20 } = req.query;
             
-            if (!imdbId) {
-                return res.status(400).json({ error: 'IMDb ID is required' });
-            }
-
-            const streams = await generateRealDebridStreams(imdbId, 'movie');
-            res.json({ streams: streams || [] });
-        } catch (error) {
-            console.error('Test torrent error:', error);
-            res.status(500).json({ error: 'Test failed: ' + error.message });
-        }
-    });
-
-    // Settings endpoints
-    app.get('/api/settings', (req, res) => {
-        try {
-            const settings = {
-                aiProvider: process.env.AI_PROVIDER || 'gemini',
-                aiModel: process.env.AI_MODEL || 'gemini-2.5-flash-lite-preview-06-17',
-                correctionIntensity: process.env.CORRECTION_INTENSITY || '7',
-                aiTemperature: process.env.AI_TEMPERATURE || '0.3',
-                primaryLanguage: process.env.PRIMARY_LANGUAGE || 'tr',
-                fallbackLanguage: process.env.FALLBACK_LANGUAGE || 'en',
-                autoTranslate: process.env.AUTO_TRANSLATE === 'true',
-                hearingImpaired: process.env.HEARING_IMPAIRED === 'true',
-                aiEnabled: process.env.AI_ENABLED !== 'false',
-                debugMode: process.env.DEBUG_MODE === 'true',
-                scrapingEnabled: process.env.SCRAPING_ENABLED !== 'false',
-                cacheEnabled: process.env.CACHE_ENABLED !== 'false',
-                maxConcurrentRequests: process.env.MAX_CONCURRENT_REQUESTS || '5',
-                requestTimeout: process.env.REQUEST_TIMEOUT || '10',
-                minSubtitleScore: process.env.MIN_SUBTITLE_SCORE || '0.7',
-                apiKeys: {
-                    gemini: process.env.GEMINI_API_KEY ? '***' : '',
-                    openai: process.env.OPENAI_API_KEY ? '***' : '',
-                    claude: process.env.CLAUDE_API_KEY ? '***' : '',
-                    opensubtitles: process.env.OPENSUBTITLES_API_KEY ? '***' : '',
-                    tmdb: process.env.TMDB_API_KEY ? '***' : '',
-                    subdl: process.env.SUBDL_API_KEY ? '***' : '',
-                    realdebrid: process.env.REAL_DEBRID_API_KEY ? '***' : '',
-                    jackett: process.env.JACKETT_API_KEY ? '***' : ''
-                },
-                jackettUrl: process.env.JACKETT_URL || 'http://localhost:9117'
-            };
-            
-            res.json(settings);
-        } catch (error) {
-            console.error('Settings get error:', error);
-            res.status(500).json({ error: 'Failed to get settings' });
-        }
-    });
-
-    app.post('/api/settings', express.json(), (req, res) => {
-        try {
-            const settings = req.body;
-            
-            // Store settings in environment variables (for this session)
-            if (settings.aiProvider) process.env.AI_PROVIDER = settings.aiProvider;
-            if (settings.aiModel) process.env.AI_MODEL = settings.aiModel;
-            if (settings.correctionIntensity) process.env.CORRECTION_INTENSITY = settings.correctionIntensity;
-            if (settings.aiTemperature) process.env.AI_TEMPERATURE = settings.aiTemperature;
-            if (settings.primaryLanguage) process.env.PRIMARY_LANGUAGE = settings.primaryLanguage;
-            if (settings.fallbackLanguage) process.env.FALLBACK_LANGUAGE = settings.fallbackLanguage;
-            if (settings.autoTranslate !== undefined) process.env.AUTO_TRANSLATE = settings.autoTranslate.toString();
-            if (settings.hearingImpaired !== undefined) process.env.HEARING_IMPAIRED = settings.hearingImpaired.toString();
-            if (settings.aiEnabled !== undefined) process.env.AI_ENABLED = settings.aiEnabled.toString();
-            if (settings.debugMode !== undefined) process.env.DEBUG_MODE = settings.debugMode.toString();
-            if (settings.scrapingEnabled !== undefined) process.env.SCRAPING_ENABLED = settings.scrapingEnabled.toString();
-            if (settings.cacheEnabled !== undefined) process.env.CACHE_ENABLED = settings.cacheEnabled.toString();
-            if (settings.maxConcurrentRequests) process.env.MAX_CONCURRENT_REQUESTS = settings.maxConcurrentRequests;
-            if (settings.requestTimeout) process.env.REQUEST_TIMEOUT = settings.requestTimeout;
-            if (settings.minSubtitleScore) process.env.MIN_SUBTITLE_SCORE = settings.minSubtitleScore;
-            if (settings.jackettUrl) process.env.JACKETT_URL = settings.jackettUrl;
-
-            // Update API keys only if they're not masked
-            if (settings.apiKeys) {
-                Object.entries(settings.apiKeys).forEach(([key, value]) => {
-                    if (value && value !== '***') {
-                        const envKey = key.toUpperCase().replace(/([A-Z])/g, '_$1').replace(/^_/, '') + '_API_KEY';
-                        if (key === 'realdebrid') {
-                            process.env.REAL_DEBRID_API_KEY = value;
-                        } else if (key === 'jackett') {
-                            process.env.JACKETT_API_KEY = value;
-                        } else {
-                            process.env[envKey] = value;
-                        }
-                    }
+            if (!query) {
+                return res.status(400).json({
+                    success: false,
+                    error: 'Query parameter is required'
                 });
             }
 
-            console.log('Settings updated successfully');
-            res.json({ success: true, message: 'Settings saved successfully' });
-        } catch (error) {
-            console.error('Settings post error:', error);
-            res.status(500).json({ error: 'Failed to save settings' });
-        }
-    });
-
-    // Health detailed endpoint
-    app.get('/api/health/detailed', async (req, res) => {
-        try {
-            const checks = [
-                { name: 'Subtitle Services', status: 'healthy', message: 'All operational' },
-                { name: 'Real-Debrid API', status: 'healthy', message: 'Connected' },
-                { name: 'Torrent Providers', status: 'healthy', message: '12 active' },
-                { name: 'AI Services', status: 'healthy', message: 'Gemini connected' },
-                { name: 'Cache System', status: 'healthy', message: 'Operational' }
-            ];
-
-            const overallScore = 85;
-            const apis = '4/5';
-            const services = '5/5';
-            const providers = '12/15';
+            const results = await streamingManager.searchCachedContent(query, {
+                type,
+                maxResults: parseInt(maxResults)
+            });
 
             res.json({
-                overallScore,
-                apis,
-                services,
-                providers,
-                checks,
-                errors: healthData.errors || []
+                success: true,
+                timestamp: new Date().toISOString(),
+                query,
+                type,
+                ...results
             });
         } catch (error) {
-            res.status(500).json({ error: 'Failed to get detailed health' });
+            res.status(500).json({
+                success: false,
+                timestamp: new Date().toISOString(),
+                error: error.message
+            });
         }
     });
 
-    // Test subtitle search endpoint
-    app.post('/api/test/subtitle', express.json(), async (req, res) => {
+    // Stream enrichment endpoint
+    app.post('/api/streams/enrich', async (req, res) => {
         try {
-            const { imdbId, language } = req.body;
+            const { streams, options = {} } = req.body;
             
-            if (!imdbId) {
-                return res.status(400).json({ error: 'IMDb ID is required' });
+            if (!streams || !Array.isArray(streams)) {
+                return res.status(400).json({
+                    success: false,
+                    error: 'Streams array is required'
+                });
             }
 
-            const result = await getSubtitleUrlsForStremio(imdbId);
-            res.json(result || { subtitles: [] });
+            const enrichedStreams = await streamEnricher.enrichStreams(streams, options);
+
+            res.json({
+                success: true,
+                timestamp: new Date().toISOString(),
+                enriched: enrichedStreams.length,
+                streams: enrichedStreams
+            });
         } catch (error) {
-            console.error('Test subtitle error:', error);
-            res.status(500).json({ error: 'Test failed: ' + error.message });
+            res.status(500).json({
+                success: false,
+                timestamp: new Date().toISOString(),
+                error: error.message
+            });
         }
     });
 
-    // Test torrent search endpoint
-    app.post('/api/test/torrent', express.json(), async (req, res) => {
+    // AllDebrid-specific endpoints
+    app.get('/api/health/alldebrid', async (req, res) => {
         try {
-            const { imdbId, quality } = req.body;
+            const hasApiKey = !!process.env.ALL_DEBRID_API_KEY;
             
-            if (!imdbId) {
-                return res.status(400).json({ error: 'IMDb ID is required' });
+            if (!hasApiKey) {
+                return res.json({
+                    status: 'error',
+                    message: 'AllDebrid API key not configured',
+                    enabled: false
+                });
             }
 
-            const streams = await generateRealDebridStreams(imdbId, 'movie');
-            res.json({ streams: streams || [] });
+            const providers = streamingManager.getAvailableProviders();
+            const isEnabled = providers.includes('alldebrid');
+
+            if (!isEnabled) {
+                return res.json({
+                    status: 'warning',
+                    message: 'AllDebrid provider not enabled',
+                    enabled: false
+                });
+            }
+
+            // Test AllDebrid connection
+            try {
+                const { AllDebridClient } = require('./lib/allDebridClient');
+                const client = new AllDebridClient(process.env.ALL_DEBRID_API_KEY);
+                const userInfo = await client.getAccountInfo();
+
+                if (userInfo) {
+                    res.json({
+                        status: 'healthy',
+                        message: 'AllDebrid service operational',
+                        enabled: true,
+                        user: userInfo.username,
+                        premium: userInfo.premium,
+                        expiration: userInfo.expiration
+                    });
+                } else {
+                    res.json({
+                        status: 'error',
+                        message: 'AllDebrid authentication failed',
+                        enabled: false
+                    });
+                }
+            } catch (clientError) {
+                res.json({
+                    status: 'error',
+                    message: 'AllDebrid client error',
+                    enabled: false
+                });
+            }
         } catch (error) {
-            console.error('Test torrent error:', error);
-            res.status(500).json({ error: 'Test failed: ' + error.message });
+            res.status(500).json({
+                status: 'error',
+                message: error.message,
+                enabled: false
+            });
+        }
+    });
+
+    app.get('/api/alldebrid/status', async (req, res) => {
+        try {
+            const hasApiKey = !!process.env.ALL_DEBRID_API_KEY;
+            
+            if (!hasApiKey) {
+                return res.json({
+                    enabled: false,
+                    message: 'AllDebrid API key not configured'
+                });
+            }
+
+            try {
+                const { AllDebridClient } = require('./lib/allDebridClient');
+                const client = new AllDebridClient(process.env.ALL_DEBRID_API_KEY);
+                const userInfo = await client.getAccountInfo();
+
+                res.json({
+                    enabled: !!userInfo,
+                    user: userInfo?.username || 'Unknown',
+                    premium: userInfo?.premium || false,
+                    expiration: userInfo?.expiration || 'Unknown',
+                    message: userInfo ? 'Connected' : 'Authentication failed'
+                });
+            } catch (clientError) {
+                res.json({
+                    enabled: false,
+                    message: 'AllDebrid client error'
+                });
+            }
+        } catch (error) {
+            res.status(500).json({
+                enabled: false,
+                message: error.message
+            });
+        }
+    });
+
+    // Performance monitoring
+    let performanceMetrics = {
+        startTime: Date.now(),
+        requestCount: 0,
+        successCount: 0,
+        failureCount: 0,
+        responseTimes: [],
+        memoryUsage: [],
+        cpuUsage: [],
+        connections: 0
+    };
+
+    // Middleware to track performance
+    app.use((req, res, next) => {
+        const startTime = Date.now();
+        performanceMetrics.requestCount++;
+        performanceMetrics.connections++;
+        
+        res.on('finish', () => {
+            const responseTime = Date.now() - startTime;
+            performanceMetrics.responseTimes.push(responseTime);
+            
+            // Keep only last 100 response times
+            if (performanceMetrics.responseTimes.length > 100) {
+                performanceMetrics.responseTimes.shift();
+            }
+            
+            if (res.statusCode >= 200 && res.statusCode < 400) {
+                performanceMetrics.successCount++;
+            } else {
+                performanceMetrics.failureCount++;
+            }
+            
+            performanceMetrics.connections--;
+        });
+        
+        next();
+    });
+
+    // Performance metrics endpoint
+    app.get('/api/performance/metrics', (req, res) => {
+        try {
+            const memUsage = process.memoryUsage();
+            const cpuUsage = process.cpuUsage();
+            const uptime = process.uptime();
+            
+            // Calculate averages
+            const avgResponseTime = performanceMetrics.responseTimes.length > 0 
+                ? performanceMetrics.responseTimes.reduce((a, b) => a + b, 0) / performanceMetrics.responseTimes.length 
+                : 0;
+            
+            const successRate = performanceMetrics.requestCount > 0 
+                ? (performanceMetrics.successCount / performanceMetrics.requestCount) * 100 
+                : 0;
+            
+            const metrics = {
+                uptime: uptime,
+                memory: {
+                    rss: Math.round(memUsage.rss / 1024 / 1024), // MB
+                    heapUsed: Math.round(memUsage.heapUsed / 1024 / 1024), // MB
+                    heapTotal: Math.round(memUsage.heapTotal / 1024 / 1024), // MB
+                    external: Math.round(memUsage.external / 1024 / 1024) // MB
+                },
+                cpu: {
+                    user: cpuUsage.user / 1000, // milliseconds to seconds
+                    system: cpuUsage.system / 1000 // milliseconds to seconds
+                },
+                requests: {
+                    total: performanceMetrics.requestCount,
+                    success: performanceMetrics.successCount,
+                    failure: performanceMetrics.failureCount,
+                    successRate: Math.round(successRate * 100) / 100
+                },
+                performance: {
+                    averageResponseTime: Math.round(avgResponseTime * 100) / 100,
+                    activeConnections: performanceMetrics.connections,
+                    recentResponseTimes: performanceMetrics.responseTimes.slice(-10)
+                }
+            };
+            
+            res.json(metrics);
+        } catch (error) {
+            res.status(500).json({ error: 'Failed to get performance metrics' });
+        }
+    });
+
+    // Environment status endpoint
+    app.get('/api/environment/status', (req, res) => {
+        try {
+            const envStatus = {
+                gemini: {
+                    available: !!process.env.GEMINI_API_KEY,
+                    configured: !!process.env.GEMINI_API_KEY
+                },
+                openai: {
+                    available: !!process.env.OPENAI_API_KEY,
+                    configured: !!process.env.OPENAI_API_KEY
+                },
+                realDebrid: {
+                    available: !!process.env.REAL_DEBRID_API_KEY,
+                    configured: !!process.env.REAL_DEBRID_API_KEY
+                },
+                premiumize: {
+                    available: !!process.env.PREMIUMIZE_API_KEY,
+                    configured: !!process.env.PREMIUMIZE_API_KEY
+                },
+                opensubtitles: {
+                    available: !!process.env.OPENSUBTITLES_API_KEY,
+                    configured: !!process.env.OPENSUBTITLES_API_KEY
+                },
+                subdl: {
+                    available: !!process.env.SUBDL_API_KEY,
+                    configured: !!process.env.SUBDL_API_KEY
+                },
+                database: {
+                    available: true,
+                    configured: true
+                }
+            };
+            
+            res.json(envStatus);
+        } catch (error) {
+            console.error('Environment status error:', error);
+            res.status(500).json({
+                error: 'Failed to retrieve environment status',
+                details: error.message
+            });
+        }
+    });
+
+    // Enhanced configuration endpoint with environment fallback
+    app.get('/api/config', (req, res) => {
+        try {
+            const userConfig = getUserConfig();
+            const envConfig = {
+                realdebrid: process.env.REALDEBRID_API_KEY || '',
+                alldebrid: process.env.ALLDEBRID_API_KEY || '',
+                opensubtitles: process.env.OPENSUBTITLES_API_KEY || ''
+            };
+            
+            // Merge user config with environment fallback
+            const config = {
+                realdebrid: userConfig.realdebrid || envConfig.realdebrid,
+                alldebrid: userConfig.alldebrid || envConfig.alldebrid,
+                opensubtitles: userConfig.opensubtitles || envConfig.opensubtitles,
+                preferredProvider: userConfig.preferredProvider || 'auto',
+                fallbackMode: userConfig.fallbackMode !== undefined ? userConfig.fallbackMode : true,
+                performanceMonitoring: userConfig.performanceMonitoring !== undefined ? userConfig.performanceMonitoring : true,
+                sources: {
+                    realdebrid: userConfig.realdebrid ? 'user' : (envConfig.realdebrid ? 'environment' : 'none'),
+                    alldebrid: userConfig.alldebrid ? 'user' : (envConfig.alldebrid ? 'environment' : 'none'),
+                    opensubtitles: userConfig.opensubtitles ? 'user' : (envConfig.opensubtitles ? 'environment' : 'none')
+                }
+            };
+            
+            res.json(config);
+        } catch (error) {
+            res.status(500).json({ error: 'Failed to get configuration' });
+        }
+    });
+
+    // Settings endpoint
+    app.get('/api/settings', (req, res) => {
+        try {
+            res.json({
+                settings: {
+                    aiProvider: process.env.AI_PROVIDER || 'gemini',
+                    aiModel: process.env.AI_MODEL || 'gemini-pro',
+                    correctionIntensity: parseInt(process.env.CORRECTION_INTENSITY || '50'),
+                    aiTemperature: parseFloat(process.env.AI_TEMPERATURE || '0.7'),
+                    primaryLanguage: process.env.PRIMARY_LANGUAGE || 'tr',
+                    fallbackLanguage: process.env.FALLBACK_LANGUAGE || 'en',
+                    autoTranslate: process.env.AUTO_TRANSLATE === 'true',
+                    hearingImpaired: process.env.HEARING_IMPAIRED === 'true',
+                    aiEnabled: process.env.AI_ENABLED !== 'false',
+                    debugMode: process.env.DEBUG_MODE === 'true',
+                    scrapingEnabled: process.env.SCRAPING_ENABLED !== 'false',
+                    cacheEnabled: process.env.CACHE_ENABLED !== 'false',
+                    maxConcurrentRequests: parseInt(process.env.MAX_CONCURRENT_REQUESTS || '5'),
+                    requestTimeout: parseInt(process.env.REQUEST_TIMEOUT || '30'),
+                    minSubtitleScore: parseFloat(process.env.MIN_SUBTITLE_SCORE || '0.7')
+                },
+                status: 'success'
+            });
+        } catch (error) {
+            console.error('Settings retrieval error:', error);
+            res.status(500).json({
+                error: 'Failed to retrieve settings',
+                details: error.message
+            });
+        }
+    });
+
+    // Settings update endpoint
+    app.post('/api/settings', express.json(), (req, res) => {
+        try {
+            const { settings } = req.body;
+            
+            if (!settings || typeof settings !== 'object') {
+                return res.status(400).json({
+                    error: 'Invalid settings format'
+                });
+            }
+            
+            // Update settings in memory (in production, you might want to persist these)
+            Object.entries(settings).forEach(([key, value]) => {
+                if (value !== undefined && value !== null) {
+                    const envKey = key.replace(/([A-Z])/g, '_$1').toUpperCase();
+                    process.env[envKey] = String(value);
+                }
+            });
+            
+            res.json({
+                success: true,
+                message: 'Settings updated successfully',
+                settings: settings
+            });
+        } catch (error) {
+            console.error('Settings update error:', error);
+            res.status(500).json({
+                error: 'Failed to update settings',
+                details: error.message
+            });
         }
     });
 
