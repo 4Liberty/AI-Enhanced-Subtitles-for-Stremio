@@ -1,5 +1,5 @@
 // server.js
-// --- FINAL STABLE VERSION v2.9.1 ---
+// --- MERGED & ENHANCED VERSION v2.9.2 ---
 
 const express = require('express');
 const { addonBuilder, serveHTTP } = require('stremio-addon-sdk');
@@ -9,16 +9,17 @@ const {
     getAICorrectedSubtitleDirect,
     getCachedSubtitleContent,
     getProgressiveSubtitleContent,
-    getAiEnhancementStatus
+    getAiEnhancementStatus,
+    getAICorrectedSubtitle
 } = require('./lib/subtitleMatcher');
-const { streamEnricher } = require('./lib/streamEnricher');
+const { streamEnricher, getEnrichedStreams } = require('./lib/streamEnricher');
 const { initializeStreamingProviders, streamingManager } = require('./lib/streamingProviderManager');
 const { setupUIRoutes } = require('./ui-api');
 
 // Get the AI enhancement status map
 const aiEnhancementStatus = getAiEnhancementStatus();
 
-console.log("Starting Stremio AI Subtitle Addon v2.9.1 with Beautiful UI...");
+console.log("Starting Stremio AI Subtitle Addon v2.9.2 - Merged & Enhanced...");
 
 // Initialize Express app
 const app = express();
@@ -222,7 +223,7 @@ const manifest = {
 
 const builder = new addonBuilder(manifest);
 
-// Define the subtitle handler with input validation
+// Enhanced subtitle handler with better error handling
 const subtitleHandler = async (args) => {
     console.log(`[Handler] Subtitle request received for: ${args.id}`);
     const infoHash = args.extra && args.extra.video_hash ? args.extra.video_hash : null;
@@ -232,168 +233,198 @@ const subtitleHandler = async (args) => {
     const language = 'tr';
     const imdbId = args.id;
 
-    // 1. Try hash-matched subtitles first
-    if (infoHash) {
-        const hashSubs = await getSubtitleUrlsForStremio(imdbId, type, season, episode, language, infoHash);
-        if (hashSubs && hashSubs.length > 0) {
-            console.log(`[Handler] Found hash-matched subtitle for ${imdbId}`);
-            return { subtitles: [hashSubs[0]] };
-        }
-    }
-
-    // 2. No hash match, try to get AI-enhanced subtitle (wait up to 15 seconds)
-    const AI_WAIT_TIMEOUT = 15000;
-    let aiSubtitle = null;
-    let aiError = null;
-    const aiPromise = (async () => {
-        try {
-            // Get best original subtitle
-            const originals = await getSubtitleUrlsForStremio(imdbId, type, season, episode, language);
-            if (originals && originals.length > 0) {
-                const originalContent = await downloadAndProcessSubtitle(originals[0].url, imdbId, originals[0].name);
-                if (originalContent) {
-                    const enhancedContent = await getAICorrectedSubtitleDirect(originalContent, { primaryLanguage: language });
-                    if (enhancedContent && enhancedContent.length > 10) {
-                        aiSubtitle = [{
-                            id: `ai-enhanced-${imdbId}`,
-                            lang: language,
-                            url: `data:text/plain;charset=utf-8,${encodeURIComponent(enhancedContent)}`,
-                            name: 'Turkish (AI Enhanced)'
-                        }];
-                    }
-                }
+    try {
+        // 1. Try hash-matched subtitles first
+        if (infoHash) {
+            const hashSubs = await getSubtitleUrlsForStremio(imdbId, type, season, episode, language, infoHash);
+            if (hashSubs && hashSubs.length > 0) {
+                console.log(`[Handler] Found hash-matched subtitle for ${imdbId}`);
+                return { subtitles: [hashSubs[0]] };
             }
-        } catch (err) {
-            aiError = err;
         }
-    })();
-    // Wait for AI or timeout
-    await Promise.race([
-        aiPromise,
-        new Promise(resolve => setTimeout(resolve, AI_WAIT_TIMEOUT))
-    ]);
-    if (aiSubtitle) {
-        console.log(`[Handler] Serving AI-enhanced subtitle for ${imdbId}`);
-        return { subtitles: aiSubtitle };
-    }
-    if (aiError) {
-        console.warn(`[Handler] AI enhancement error:`, aiError);
-    }
-    // 3. Fallback to best original
-    const originals = await getSubtitleUrlsForStremio(imdbId, type, season, episode, language);
-    if (originals && originals.length > 0) {
-        console.log(`[Handler] Serving best original subtitle for ${imdbId}`);
-        return { subtitles: [originals[0]] };
-    }
-    console.log(`[Handler] No subtitles found for ${imdbId}`);
-    return { subtitles: [] };
-};
 
-// Define the stream handler for Real-Debrid and hash-based matching
-const streamHandler = async (args) => {
-    console.log(`[Handler] Stream request received for: ${args.id}`);
-    
-    // Extract the clean movie ID (remove .json extension if present)
-    const movieId = args.id.replace('.json', '');
-    console.log(`[Handler] Clean movie ID for stream provision: ${movieId}`);
-    
-    // Pre-cache subtitles in the background for faster response when user clicks play
-    if (movieId.startsWith('tt')) {
-        console.log(`[Handler] Starting subtitle pre-caching for ${movieId}`);
-        // Don't await this - let it run in background
-        getSubtitleUrlsForStremio(movieId, 'movie', null, null, 'tr')
-            .then(result => {
-                if (result && result.length > 0) {
-                    console.log(`[Handler] Pre-cached ${result.length} subtitle option(s) for ${movieId}`);
-                } else {
-                    console.log(`[Handler] No subtitles found during pre-caching for ${movieId}`);
-                }
-            })
-            .catch(err => {
-                console.error(`[Handler] Pre-caching failed for ${movieId}:`, err);
-            });
-    }
-    
-    const streams = [];
-    
-    // Use enhanced MediaFusion architecture via streamingProviderManager
-    if (movieId.startsWith('tt')) {
-        console.log(`[Handler] Searching with enhanced MediaFusion architecture...`);
-        try {
-            const cachedSearch = await streamingManager.searchCachedContent(movieId, {
-                type: 'movie',
-                maxResults: 20
-            });
-            
-            if (cachedSearch.success && cachedSearch.totalResults > 0) {
-                console.log(`[Handler] Found ${cachedSearch.totalResults} cached results across providers`);
-                
-                // Convert cached search results to stream format
-                for (const providerResult of cachedSearch.providers) {
-                    if (providerResult.success && providerResult.results.length > 0) {
-                        for (const result of providerResult.results) {
-                            // Enrich stream with MediaFusion patterns
-                            const enrichedStream = await streamEnricher.enrichStream(result, {
-                                preferredProvider: providerResult.provider,
-                                includeSubtitles: true
-                            });
-                            
-                            streams.push({
-                                title: `🎬 ${enrichedStream.filename || result.filename} [${enrichedStream.quality?.resolution || 'Unknown'}]`,
-                                url: enrichedStream.streaming?.streamUrl || `magnet:?xt=urn:btih:${result.hash}`,
-                                quality: enrichedStream.quality?.resolution || 'Unknown',
-                                seeds: 100,
-                                peers: 50,
-                                behaviorHints: {
-                                    notWebReady: !enrichedStream.streaming?.streamUrl,
-                                    cached: enrichedStream.streaming?.cached || false,
-                                    provider: enrichedStream.streaming?.provider || 'multi-debrid'
-                                },
-                                infoHash: result.hash || result.id,
-                                filesize: enrichedStream.size || result.size,
-                                metadata: enrichedStream.metadata
-                            });
+        // 2. No hash match, try to get AI-enhanced subtitle (wait up to 15 seconds)
+        const AI_WAIT_TIMEOUT = 15000;
+        let aiSubtitle = null;
+        let aiError = null;
+        const aiPromise = (async () => {
+            try {
+                // Get best original subtitle
+                const originals = await getSubtitleUrlsForStremio(imdbId, type, season, episode, language);
+                if (originals && originals.length > 0) {
+                    const originalContent = await downloadAndProcessSubtitle(originals[0].url, imdbId, originals[0].name);
+                    if (originalContent) {
+                        const enhancedContent = await getAICorrectedSubtitleDirect(originalContent, { primaryLanguage: language });
+                        if (enhancedContent && enhancedContent.length > 10) {
+                            aiSubtitle = [{
+                                id: `ai-enhanced-${imdbId}`,
+                                lang: language,
+                                url: `data:text/plain;charset=utf-8,${encodeURIComponent(enhancedContent)}`,
+                                name: 'Turkish (AI Enhanced)'
+                            }];
                         }
                     }
                 }
-            } else {
-                console.log(`[Handler] No cached streams found via MediaFusion architecture`);
+            } catch (err) {
+                aiError = err;
             }
-        } catch (e) {
-            console.error(`[Handler] MediaFusion search error:`, e);
-        }
-    }
-    
-    // Fallback: Hash-based subtitle matching streams for better subtitle synchronization
-    if (streams.length === 0) {
-        console.log(`[Handler] No streams found, providing hash-matching streams for subtitle sync`);
+        })();
         
-        const sampleHashes = [
-            { title: 'Hash-Match 1080p', infoHash: '3a4b5c6d7e8f9a0b1c2d3e4f5a6b7c8d9e0f1a2b', quality: '1080p' },
-            { title: 'Hash-Match 720p', infoHash: '1a2b3c4d5e6f7a8b9c0d1e2f3a4b5c6d7e8f9a0b', quality: '720p' },
-            { title: 'Hash-Match 4K', infoHash: '9a0b1c2d3e4f5a6b7c8d9e0f1a2b3c4d5e6f7a8b', quality: '4K' }
-        ];
+        // Wait for AI or timeout
+        await Promise.race([
+            aiPromise,
+            new Promise(resolve => setTimeout(resolve, AI_WAIT_TIMEOUT))
+        ]);
         
-        for (const sample of sampleHashes) {
-            streams.push({
-                title: `${sample.title} (Subtitle Hash-Matching)`,
-                url: `magnet:?xt=urn:btih:${sample.infoHash}&dn=sample`,
-                quality: sample.quality,
-                seeds: 1,
-                peers: 1,
-                behaviorHints: {
-                    notWebReady: true,
-                    hashOnly: true,
-                    subtitleMatch: true
-                },
-                infoHash: sample.infoHash
-            });
+        if (aiSubtitle) {
+            console.log(`[Handler] Serving AI-enhanced subtitle for ${imdbId}`);
+            return { subtitles: aiSubtitle };
         }
+        
+        if (aiError) {
+            console.warn(`[Handler] AI enhancement error:`, aiError);
+        }
+        
+        // 3. Fallback to best original
+        const originals = await getSubtitleUrlsForStremio(imdbId, type, season, episode, language);
+        if (originals && originals.length > 0) {
+            console.log(`[Handler] Serving best original subtitle for ${imdbId}`);
+            return { subtitles: [originals[0]] };
+        }
+        
+        console.log(`[Handler] No subtitles found for ${imdbId}`);
+        return { subtitles: [] };
+        
+    } catch (error) {
+        console.error("[Handler] Error in subtitle handler:", error);
+        return { subtitles: [] };
     }
+};
+
+// Enhanced stream handler with better error handling
+const streamHandler = async (args) => {
+    console.log(`[Handler] Stream request received for: ${args.id}`);
     
-    console.log(`[Handler] Providing ${streams.length} total streams`);
-    
-    return { streams };
+    try {
+        // Extract the clean movie ID (remove .json extension if present)
+        const movieId = args.id.replace('.json', '');
+        console.log(`[Handler] Clean movie ID for stream provision: ${movieId}`);
+        
+        // Pre-cache subtitles in the background for faster response when user clicks play
+        if (movieId.startsWith('tt')) {
+            console.log(`[Handler] Starting subtitle pre-caching for ${movieId}`);
+            // Don't await this - let it run in background
+            getSubtitleUrlsForStremio(movieId, 'movie', null, null, 'tr')
+                .then(result => {
+                    if (result && result.length > 0) {
+                        console.log(`[Handler] Pre-cached ${result.length} subtitle option(s) for ${movieId}`);
+                    } else {
+                        console.log(`[Handler] No subtitles found during pre-caching for ${movieId}`);
+                    }
+                })
+                .catch(err => {
+                    console.error(`[Handler] Pre-caching failed for ${movieId}:`, err);
+                });
+        }
+        
+        const streams = [];
+        
+        // Try enhanced MediaFusion architecture if available
+        if (movieId.startsWith('tt') && streamingManager) {
+            console.log(`[Handler] Searching with enhanced MediaFusion architecture...`);
+            try {
+                const cachedSearch = await streamingManager.searchCachedContent(movieId, {
+                    type: 'movie',
+                    maxResults: 20
+                });
+                
+                if (cachedSearch.success && cachedSearch.totalResults > 0) {
+                    console.log(`[Handler] Found ${cachedSearch.totalResults} cached results across providers`);
+                    
+                    // Convert cached search results to stream format
+                    for (const providerResult of cachedSearch.providers) {
+                        if (providerResult.success && providerResult.results.length > 0) {
+                            for (const result of providerResult.results) {
+                                // Enrich stream with MediaFusion patterns
+                                const enrichedStream = await streamEnricher.enrichStream(result, {
+                                    preferredProvider: providerResult.provider,
+                                    includeSubtitles: true
+                                });
+                                
+                                streams.push({
+                                    title: `🎬 ${enrichedStream.filename || result.filename} [${enrichedStream.quality?.resolution || 'Unknown'}]`,
+                                    url: enrichedStream.streaming?.streamUrl || `magnet:?xt=urn:btih:${result.hash}`,
+                                    quality: enrichedStream.quality?.resolution || 'Unknown',
+                                    seeds: 100,
+                                    peers: 50,
+                                    behaviorHints: {
+                                        notWebReady: !enrichedStream.streaming?.streamUrl,
+                                        cached: enrichedStream.streaming?.cached || false,
+                                        provider: enrichedStream.streaming?.provider || 'multi-debrid'
+                                    },
+                                    infoHash: result.hash || result.id,
+                                    filesize: enrichedStream.size || result.size,
+                                    metadata: enrichedStream.metadata
+                                });
+                            }
+                        }
+                    }
+                } else {
+                    console.log(`[Handler] No cached streams found via MediaFusion architecture`);
+                }
+            } catch (e) {
+                console.error(`[Handler] MediaFusion search error:`, e);
+            }
+        }
+        
+        // Fallback to basic enrichment if no MediaFusion results
+        if (streams.length === 0) {
+            console.log(`[Handler] Trying basic stream enrichment...`);
+            try {
+                const enriched = await getEnrichedStreams(args.type, args.id, []);
+                if (enriched && enriched.length > 0) {
+                    streams.push(...enriched);
+                    console.log(`[Handler] Added ${enriched.length} enriched streams`);
+                }
+            } catch (e) {
+                console.error(`[Handler] Basic stream enrichment error:`, e);
+            }
+        }
+        
+        // Final fallback: Hash-based subtitle matching streams
+        if (streams.length === 0) {
+            console.log(`[Handler] No streams found, providing hash-matching streams for subtitle sync`);
+            
+            const sampleHashes = [
+                { title: 'Hash-Match 1080p', infoHash: '3a4b5c6d7e8f9a0b1c2d3e4f5a6b7c8d9e0f1a2b', quality: '1080p' },
+                { title: 'Hash-Match 720p', infoHash: '1a2b3c4d5e6f7a8b9c0d1e2f3a4b5c6d7e8f9a0b', quality: '720p' },
+                { title: 'Hash-Match 4K', infoHash: '9a0b1c2d3e4f5a6b7c8d9e0f1a2b3c4d5e6f7a8b', quality: '4K' }
+            ];
+            
+            for (const sample of sampleHashes) {
+                streams.push({
+                    title: `${sample.title} (Subtitle Hash-Matching)`,
+                    url: `magnet:?xt=urn:btih:${sample.infoHash}&dn=sample`,
+                    quality: sample.quality,
+                    seeds: 1,
+                    peers: 1,
+                    behaviorHints: {
+                        notWebReady: true,
+                        hashOnly: true,
+                        subtitleMatch: true
+                    },
+                    infoHash: sample.infoHash
+                });
+            }
+        }
+        
+        console.log(`[Handler] Providing ${streams.length} total streams`);
+        return { streams };
+        
+    } catch (error) {
+        console.error("[Handler] Error in stream handler:", error);
+        return { streams: [] };
+    }
 };
 
 // Define both handlers
@@ -502,57 +533,58 @@ app.get('/manifest.json', (req, res) => {
     res.send(JSON.stringify(addonInterface.manifest, null, 2));
 });
 
-// IMPORTANT: .srt route MUST come before other subtitle routes to prevent conflicts
+// Enhanced .srt route with better error handling and fallback to clean version
 app.get('/subtitles/:videoId/:language.srt', async (req, res) => {
     const { videoId, language } = req.params;
     const { hash, test, fallback, source, progressive } = req.query;
     
     console.log(`[SRT Endpoint] Subtitle file request. Video ID: ${videoId}, Lang: ${language}, Hash: ${hash}, Test: ${test}, Fallback: ${fallback}, Source: ${source}, Progressive: ${progressive}`);
 
-    // Handle progressive AI-enhanced subtitles
-    if (progressive === 'true' && source) {
-        const baseSource = source.replace('-ai', ''); // Remove -ai suffix to get base source
-        console.log(`[SRT Endpoint] Progressive request for ${baseSource}, checking AI enhancement status...`);
-        
-        const progressiveContent = getProgressiveSubtitleContent(videoId, baseSource);
-        if (progressiveContent) {
-            const enhancementKey = `${videoId}-${baseSource}-ai`;
-            const aiStatus = aiEnhancementStatus.get(enhancementKey);
-            const isAiEnhanced = aiStatus === 'completed';
+    try {
+        // Handle progressive AI-enhanced subtitles
+        if (progressive === 'true' && source) {
+            const baseSource = source.replace('-ai', ''); // Remove -ai suffix to get base source
+            console.log(`[SRT Endpoint] Progressive request for ${baseSource}, checking AI enhancement status...`);
             
-            console.log(`[SRT Endpoint] Serving ${isAiEnhanced ? 'AI-enhanced' : 'original'} progressive subtitle for ${baseSource} (AI status: ${aiStatus})`);
-            res.setHeader('Content-Type', 'text/plain; charset=utf-8');
-            res.setHeader('Content-Disposition', `attachment; filename="${videoId}_${language}_${isAiEnhanced ? 'ai' : 'original'}.srt"`);
-            res.setHeader('X-AI-Enhanced', isAiEnhanced ? 'true' : 'false');
-            res.setHeader('X-AI-Status', aiStatus || 'unknown');
-            res.send(progressiveContent);
-            return;
-        } else {
-            console.log(`[SRT Endpoint] No progressive content found for ${baseSource}, falling back to traditional method`);
+            const progressiveContent = getProgressiveSubtitleContent(videoId, baseSource);
+            if (progressiveContent) {
+                const enhancementKey = `${videoId}-${baseSource}-ai`;
+                const aiStatus = aiEnhancementStatus.get(enhancementKey);
+                const isAiEnhanced = aiStatus === 'completed';
+                
+                console.log(`[SRT Endpoint] Serving ${isAiEnhanced ? 'AI-enhanced' : 'original'} progressive subtitle for ${baseSource} (AI status: ${aiStatus})`);
+                res.setHeader('Content-Type', 'text/plain; charset=utf-8');
+                res.setHeader('Content-Disposition', `attachment; filename="${videoId}_${language}_${isAiEnhanced ? 'ai' : 'original'}.srt"`);
+                res.setHeader('X-AI-Enhanced', isAiEnhanced ? 'true' : 'false');
+                res.setHeader('X-AI-Status', aiStatus || 'unknown');
+                res.send(progressiveContent);
+                return;
+            } else {
+                console.log(`[SRT Endpoint] No progressive content found for ${baseSource}, falling back to traditional method`);
+            }
         }
-    }
 
-    // If we have a specific source (subdl, podnapisi, opensubtitles), serve the cached content
-    if (source && (source === 'subdl' || source === 'podnapisi' || source === 'opensubtitles' || 
-                   source === 'subdl-original' || source === 'podnapisi-original' || source === 'opensubtitles-original' || 
-                   source === 'subdl-error' || source === 'subdl-hash' || source === 'subdl-ai' || 
-                   source === 'podnapisi-ai' || source === 'podnapisi-hash' || 
-                   source === 'opensubtitles-ai' || source === 'opensubtitles-hash')) {
-        const cachedContent = getCachedSubtitleContent(videoId, source);
-        if (cachedContent) {
-            console.log(`[SRT Endpoint] Serving cached ${source} subtitle for ${videoId}`);
-            res.setHeader('Content-Type', 'text/plain; charset=utf-8');
-            res.setHeader('Content-Disposition', `attachment; filename="${videoId}_${language}_${source}.srt"`);
-            res.send(cachedContent);
-            return;
-        } else {
-            console.log(`[SRT Endpoint] No cached content found for ${videoId} from ${source}`);
+        // If we have a specific source, serve the cached content
+        if (source && (source === 'subdl' || source === 'podnapisi' || source === 'opensubtitles' || 
+                       source === 'subdl-original' || source === 'podnapisi-original' || source === 'opensubtitles-original' || 
+                       source === 'subdl-error' || source === 'subdl-hash' || source === 'subdl-ai' || 
+                       source === 'podnapisi-ai' || source === 'podnapisi-hash' || 
+                       source === 'opensubtitles-ai' || source === 'opensubtitles-hash')) {
+            const cachedContent = getCachedSubtitleContent(videoId, source);
+            if (cachedContent) {
+                console.log(`[SRT Endpoint] Serving cached ${source} subtitle for ${videoId}`);
+                res.setHeader('Content-Type', 'text/plain; charset=utf-8');
+                res.setHeader('Content-Disposition', `attachment; filename="${videoId}_${language}_${source}.srt"`);
+                res.send(cachedContent);
+                return;
+            } else {
+                console.log(`[SRT Endpoint] No cached content found for ${videoId} from ${source}`);
+            }
         }
-    }
 
-    // If in test mode (no API keys), return a sample subtitle
-    if (test === 'true') {
-        const testSubtitle = `1
+        // If in test mode (no API keys), return a sample subtitle
+        if (test === 'true') {
+            const testSubtitle = `1
 00:00:01,000 --> 00:00:05,000
 Test Turkish subtitle for debugging
 
@@ -564,15 +596,15 @@ API Keys not configured - this is a test subtitle
 00:00:11,000 --> 00:00:15,000
 VideoId: ${videoId}
 `;
-        res.setHeader('Content-Type', 'text/plain; charset=utf-8');
-        res.setHeader('Content-Disposition', `attachment; filename="${videoId}_${language}.srt"`);
-        res.send(testSubtitle);
-        return;
-    }
+            res.setHeader('Content-Type', 'text/plain; charset=utf-8');
+            res.setHeader('Content-Disposition', `attachment; filename="${videoId}_${language}.srt"`);
+            res.send(testSubtitle);
+            return;
+        }
 
-    // If fallback mode, provide a basic subtitle
-    if (fallback === 'true' || fallback === 'traditional') {
-        const fallbackSubtitle = `1
+        // If fallback mode, provide a basic subtitle
+        if (fallback === 'true' || fallback === 'traditional') {
+            const fallbackSubtitle = `1
 00:00:01,000 --> 00:00:05,000
 Turkish subtitle loading...
 
@@ -588,18 +620,32 @@ Searching external subtitle sources...
 00:00:16,000 --> 00:00:20,000
 Please wait while we find subtitles
 `;
-        res.setHeader('Content-Type', 'text/plain; charset=utf-8');
-        res.setHeader('Content-Disposition', `attachment; filename="${videoId}_${language}.srt"`);
-        res.send(fallbackSubtitle);
-        return;
-    }
+            res.setHeader('Content-Type', 'text/plain; charset=utf-8');
+            res.setHeader('Content-Disposition', `attachment; filename="${videoId}_${language}.srt"`);
+            res.send(fallbackSubtitle);
+            return;
+        }
 
-    // The logic for fetching and correcting subtitles should be handled by the main subtitle handler,
-    // which calls getSubtitleUrlsForStremio. This endpoint should only serve cached content.
-    // The incorrect call to getAICorrectedSubtitle has been removed.
-    
-    console.error(`[SRT Endpoint] No cached subtitle found for ${videoId} and no fallback requested.`);
-    res.status(404).send('Subtitle not found.');
+        // Try to use the clean version's getAICorrectedSubtitle function if available
+        if (typeof getAICorrectedSubtitle === 'function') {
+            console.log(`[SRT Endpoint] Using clean version's getAICorrectedSubtitle for ${videoId}`);
+            const correctedContent = await getAICorrectedSubtitle(videoId, language);
+            if (correctedContent) {
+                res.setHeader('Content-Type', 'text/plain; charset=utf-8');
+                res.setHeader('Content-Disposition', `attachment; filename="${videoId}_${language}.srt"`);
+                res.send(correctedContent);
+                return;
+            }
+        }
+
+        // Final fallback
+        console.error(`[SRT Endpoint] No subtitle found for ${videoId} and no fallback requested.`);
+        res.status(404).send('Subtitle not found.');
+        
+    } catch (error) {
+        console.error(`[SRT Endpoint] Error processing subtitle request:`, error);
+        res.status(500).send('Error processing subtitle request.');
+    }
 });
 
 // Subtitles resource endpoints that Stremio expects
@@ -743,7 +789,7 @@ app.get('/health', async (req, res) => {
 });
 
 app.listen(port, () => {
-    console.log(`\n🚀 Stremio AI Subtitle & Enhanced Multi-Debrid Addon is running!`);
+    console.log(`\n🚀 Stremio AI Subtitle & Enhanced Multi-Debrid Addon is running! (Merged v2.9.2)`);
     console.log(`📍 Main URL: http://0.0.0.0:${port}`);
     console.log(`🎨 Beautiful UI: http://0.0.0.0:${port}/ui`);
     console.log(`📋 Manifest: http://0.0.0.0:${port}/manifest.json`);
@@ -757,6 +803,7 @@ app.listen(port, () => {
     console.log(`   • Hash-based subtitle synchronization`);
     console.log(`   • Comprehensive health monitoring & performance metrics`);
     console.log(`   • Beautiful modern UI with comprehensive settings`);
+    console.log(`   • Merged best features from both server versions`);
     console.log(`\n📊 All UI-related endpoints moved to ui-api.js for better organization`);
     console.log(`🔗 Open http://localhost:${port}/ui to access the control panel!`);
 });

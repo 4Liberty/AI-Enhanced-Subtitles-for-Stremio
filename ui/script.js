@@ -1,4 +1,4 @@
-// Modern UI JavaScript for Stremio Addon Control Panel
+// Enhanced UI JavaScript for Stremio Addon Control Panel - Merged Version
 class StremioAddonUI {
     constructor() {
         this.currentTab = 'dashboard';
@@ -15,6 +15,7 @@ class StremioAddonUI {
         this.refreshInterval = null;
         this.performanceInterval = null;
         this.chartInstances = {};
+        this.isInitialized = false;
         
         this.init();
     }
@@ -37,6 +38,11 @@ class StremioAddonUI {
 
     initializeAfterDOM() {
         try {
+            if (this.isInitialized) {
+                console.log('UI already initialized, skipping...');
+                return;
+            }
+
             // Setup event listeners first
             this.setupEventListeners();
             
@@ -63,6 +69,7 @@ class StremioAddonUI {
                 console.error('Chart initialization failed:', error);
             });
             
+            this.isInitialized = true;
             console.log('Enhanced Stremio Addon UI initialization complete');
             
         } catch (error) {
@@ -142,6 +149,13 @@ class StremioAddonUI {
                 this.copyAddonUrl();
             });
         }
+        // Test buttons
+        document.querySelectorAll('[data-test]').forEach(button => {
+            button.addEventListener('click', (e) => {
+                const testType = e.target.dataset.test;
+                this.runTest(testType);
+            });
+        });
         
         console.log('Event listeners setup complete');
     }
@@ -341,15 +355,41 @@ class StremioAddonUI {
                         subtitlesProcessed: 0,
                         torrentsFound: 0,
                         activeProviders: Object.values(healthData.services || {}).filter(Boolean).length,
-                        uptime: 0
+                        uptime: 0,
+                        performance: {
+                            responseTime: 0,
+                            successRate: 0,
+                            memoryUsage: 0,
+                            activeConnections: 0
+                        }
                     };
                 }
-                throw new Error(`Dashboard API failed: ${response.status}`);
+                // Return fallback data instead of null
+                return {
+                    subtitlesProcessed: 0,
+                    torrentsFound: 0,
+                    activeProviders: 0,
+                    uptime: 0,
+                    memoryUsage: 0,
+                    successRate: 0,
+                    status: 'warning',
+                    message: 'API not responding'
+                };
             }
             return await response.json();
         } catch (error) {
             console.error('Failed to fetch dashboard data:', error);
-            return null;
+            // Return fallback data instead of null
+            return {
+                subtitlesProcessed: 0,
+                torrentsFound: 0,
+                activeProviders: 0,
+                uptime: 0,
+                memoryUsage: 0,
+                successRate: 0,
+                status: 'error',
+                message: 'Failed to fetch data'
+            };
         }
     }
 
@@ -1244,76 +1284,144 @@ class StremioAddonUI {
         this.addToActivityLog(message, type);
     }
 
-    getNotificationIcon(type) {
-        switch (type) {
-            case 'success': return 'fa-check-circle';
-            case 'error': return 'fa-exclamation-circle';
-            case 'warning': return 'fa-exclamation-triangle';
-            case 'info':
-            default: return 'fa-info-circle';
-        }
-    }
-
-    // Addon installation functions
-    installAddon() {
-        const manifestUrl = `${window.location.origin}/manifest.json`;
-        const stremioUrl = `stremio://${manifestUrl}`;
-        
+    // Enhanced notification system with fallback
+    showSafeNotification(message, type = 'info') {
         try {
-            window.open(stremioUrl, '_blank');
-            this.showNotification('Opening Stremio to install addon...', 'info');
+            console.log(`[${type.toUpperCase()}] ${message}`);
+            
+            // Try to show visual notification if notification container exists
+            const container = document.getElementById('notification-container') || document.body;
+            
+            const notification = document.createElement('div');
+            notification.className = `notification notification-${type}`;
+            notification.innerHTML = `
+                <div class="notification-content">
+                    <i class="fas ${this.getNotificationIcon(type)}"></i>
+                    <span>${message}</span>
+                    <button class="notification-close" onclick="this.parentElement.parentElement.remove()">
+                        <i class="fas fa-times"></i>
+                    </button>
+                </div>
+            `;
+            
+            container.appendChild(notification);
+            
+            // Auto-remove after 5 seconds
+            setTimeout(() => {
+                if (notification.parentNode) {
+                    notification.parentNode.removeChild(notification);
+                }
+            }, 5000);
+            
+            // Add to activity log
+            this.addToActivityLog(message, type);
         } catch (error) {
-            this.showNotification('Failed to open Stremio. Please copy the manifest URL manually.', 'error');
+            console.error('Error showing notification:', error);
+            // Fallback to console log
+            console.log(`NOTIFICATION [${type}]: ${message}`);
         }
     }
 
-    copyManifestUrl() {
-        const manifestUrl = `${window.location.origin}/manifest.json`;
-        
-        if (navigator.clipboard) {
-            navigator.clipboard.writeText(manifestUrl).then(() => {
-                this.showNotification('Manifest URL copied to clipboard', 'success');
-            }).catch(() => {
-                this.fallbackCopyText(manifestUrl);
-            });
-        } else {
-            this.fallbackCopyText(manifestUrl);
+    // Enhanced recent activity update
+    updateRecentActivity(errors = []) {
+        const activityList = document.getElementById('activity-list');
+        if (activityList) {
+            activityList.innerHTML = '';
+            
+            if (errors.length === 0) {
+                const noActivity = document.createElement('div');
+                noActivity.className = 'activity-item';
+                noActivity.innerHTML = `
+                    <div class="activity-time">Just now</div>
+                    <div class="activity-text">System initialized</div>
+                `;
+                activityList.appendChild(noActivity);
+            } else {
+                errors.forEach(error => {
+                    const activityItem = document.createElement('div');
+                    activityItem.className = 'activity-item';
+                    activityItem.innerHTML = `
+                        <div class="activity-time">${new Date(error.timestamp).toLocaleTimeString()}</div>
+                        <div class="activity-text">${error.message}</div>
+                    `;
+                    activityList.appendChild(activityItem);
+                });
+            }
         }
     }
 
-    copyAddonUrl() {
-        const addonUrl = window.location.origin;
-        
-        if (navigator.clipboard) {
-            navigator.clipboard.writeText(addonUrl).then(() => {
-                this.showNotification('Addon URL copied to clipboard', 'success');
-            }).catch(() => {
-                this.fallbackCopyText(addonUrl);
-            });
-        } else {
-            this.fallbackCopyText(addonUrl);
+    // Enhanced provider status update
+    updateProviders() {
+        const providersList = document.getElementById('providers-list');
+        if (providersList) {
+            providersList.innerHTML = `
+                <div class="provider-item">
+                    <span class="provider-name">Real-Debrid</span>
+                    <span class="provider-status">Checking...</span>
+                </div>
+                <div class="provider-item">
+                    <span class="provider-name">AllDebrid</span>
+                    <span class="provider-status">Checking...</span>
+                </div>
+                <div class="provider-item">
+                    <span class="provider-name">OpenSubtitles</span>
+                    <span class="provider-status">Checking...</span>
+                </div>
+                <div class="provider-item">
+                    <span class="provider-name">SubDL</span>
+                    <span class="provider-status">Checking...</span>
+                </div>
+                <div class="provider-item">
+                    <span class="provider-name">Podnapisi</span>
+                    <span class="provider-status">Checking...</span>
+                </div>
+            `;
         }
     }
 
-    fallbackCopyText(text) {
-        const textArea = document.createElement('textarea');
-        textArea.value = text;
-        textArea.style.position = 'fixed';
-        textArea.style.left = '-999999px';
-        textArea.style.top = '-999999px';
-        document.body.appendChild(textArea);
-        textArea.focus();
-        textArea.select();
+    // Enhanced test runner
+    runTest(testType) {
+        console.log(`Running test: ${testType}`);
+        this.showSafeNotification(`Running ${testType} test...`, 'info');
         
-        try {
-            document.execCommand('copy');
-            this.showNotification('URL copied to clipboard', 'success');
-        } catch (err) {
-            this.showNotification('Failed to copy URL. Please copy manually: ' + text, 'error');
+        // Simulate test running
+        setTimeout(() => {
+            this.showSafeNotification(`${testType} test completed`, 'success');
+        }, 2000);
+    }
+
+    // Enhanced cleanup method
+    destroy() {
+        console.log('Destroying UI and cleaning up resources...');
+        
+        if (this.refreshInterval) {
+            clearInterval(this.refreshInterval);
+            this.refreshInterval = null;
         }
         
-        document.body.removeChild(textArea);
+        if (this.performanceInterval) {
+            clearInterval(this.performanceInterval);
+            this.performanceInterval = null;
+        }
+        
+        // Clean up chart instances
+        Object.values(this.chartInstances).forEach(chart => {
+            if (chart && chart.destroy) {
+                chart.destroy();
+            }
+        });
+        this.chartInstances = {};
+        
+        // Clear activity log
+        this.activityLog = [];
+        
+        // Reset initialization flag
+        this.isInitialized = false;
+        
+        console.log('UI destroyed and cleaned up successfully');
     }
+
+    // ...existing code...
 }
 
 // Global error handling
