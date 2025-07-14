@@ -16,8 +16,8 @@
                 <div class="logo-section">
                     <img src="logo.svg" alt="Logo" class="logo">
                     <div class="title-section">
-                        <h1>Stremio AI Subtitle & Real-Debrid Addon</h1>
-                        <p class="subtitle">AI-powered Turkish subtitles with cached torrent streaming</p>
+                        <h1>Stremio AI Subtitle & Multi-Debrid Addon</h1>
+                        <p class="subtitle">AI-powered Turkish subtitles with Real-Debrid & AllDebrid streaming</p>
                     </div>
                 </div>
                 <div class="status-indicator" id="overall-status">
@@ -90,6 +90,13 @@
                                     <i class="fas fa-circle status-unknown"></i>
                                 </div>
                                 <span class="status-text">Real-Debrid Service</span>
+                                <span class="status-value">Checking...</span>
+                            </div>
+                            <div class="status-item" id="alldebrid-service-status">
+                                <div class="status-icon">
+                                    <i class="fas fa-circle status-unknown"></i>
+                                </div>
+                                <span class="status-text">AllDebrid Service</span>
                                 <span class="status-value">Checking...</span>
                             </div>
                             <div class="status-item" id="torrent-providers-status">
@@ -310,6 +317,29 @@
                             <div class="status-item">
                                 <span class="status-label">Traffic Left</span>
                                 <span class="status-value" id="rd-traffic">--</span>
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- AllDebrid Status -->
+                    <div class="card alldebrid-card">
+                        <h3><i class="fas fa-cloud-download-alt"></i> AllDebrid Status</h3>
+                        <div class="alldebrid-status" id="alldebrid-status">
+                            <div class="status-item">
+                                <span class="status-label">API Status</span>
+                                <span class="status-value" id="ad-api-status">Checking...</span>
+                            </div>
+                            <div class="status-item">
+                                <span class="status-label">Account Type</span>
+                                <span class="status-value" id="ad-account-type">--</span>
+                            </div>
+                            <div class="status-item">
+                                <span class="status-label">Expiration</span>
+                                <span class="status-value" id="ad-expiration">--</span>
+                            </div>
+                            <div class="status-item">
+                                <span class="status-label">Username</span>
+                                <span class="status-value" id="ad-username">--</span>
                             </div>
                         </div>
                     </div>
@@ -541,6 +571,15 @@
                                 <div class="input-group">
                                     <input type="password" id="realdebrid-api-key" class="form-input" placeholder="Enter API key">
                                     <button class="btn btn-secondary" onclick="toggleVisibility('realdebrid-api-key')">
+                                        <i class="fas fa-eye"></i>
+                                    </button>
+                                </div>
+                            </div>
+                            <div class="setting-group">
+                                <label for="alldebrid-api-key">AllDebrid API Key</label>
+                                <div class="input-group">
+                                    <input type="password" id="alldebrid-api-key" class="form-input" placeholder="Enter API key">
+                                    <button class="btn btn-secondary" onclick="toggleVisibility('alldebrid-api-key')">
                                         <i class="fas fa-eye"></i>
                                     </button>
                                 </div>

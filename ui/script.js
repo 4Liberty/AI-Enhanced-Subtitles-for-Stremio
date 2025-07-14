@@ -343,6 +343,7 @@ class StremioAddonUI {
             const statusItems = [
                 { id: 'subtitle-service-status', endpoint: '/api/health/subtitles', label: 'Subtitle Service' },
                 { id: 'realdebrid-service-status', endpoint: '/api/health/realdebrid', label: 'Real-Debrid Service' },
+                { id: 'alldebrid-service-status', endpoint: '/api/health/alldebrid', label: 'AllDebrid Service' },
                 { id: 'torrent-providers-status', endpoint: '/api/health/providers', label: 'Torrent Providers' },
                 { id: 'api-keys-status', endpoint: '/api/health/keys', label: 'API Keys' }
             ];
@@ -399,6 +400,7 @@ class StremioAddonUI {
         const statusItems = [
             { id: 'subtitle-service-status', status: status === 'offline' ? 'error' : status === 'warning' ? 'warning' : 'healthy' },
             { id: 'realdebrid-service-status', status: status === 'offline' ? 'error' : status === 'warning' ? 'warning' : 'healthy' },
+            { id: 'alldebrid-service-status', status: status === 'offline' ? 'error' : status === 'warning' ? 'warning' : 'healthy' },
             { id: 'torrent-providers-status', status: status === 'offline' ? 'error' : status === 'warning' ? 'warning' : 'healthy' },
             { id: 'api-keys-status', status: status === 'offline' ? 'error' : status === 'warning' ? 'warning' : 'healthy' }
         ];
@@ -521,6 +523,11 @@ class StremioAddonUI {
             const rdData = await rdResponse.json();
             this.updateRealDebridStatus(rdData);
 
+            // Update AllDebrid status
+            const adResponse = await fetch('/api/alldebrid/status');
+            const adData = await adResponse.json();
+            this.updateAllDebridStatus(adData);
+
             // Update provider status
             const providersResponse = await fetch('/api/torrents/providers');
             const providersData = await providersResponse.json();
@@ -619,6 +626,29 @@ class StremioAddonUI {
         document.getElementById('rd-account-type').textContent = data.accountType || '--';
         document.getElementById('rd-expiration').textContent = data.expiration || '--';
         document.getElementById('rd-traffic').textContent = data.trafficLeft || '--';
+    }
+
+    updateAllDebridStatus(data) {
+        const container = document.getElementById('alldebrid-status');
+        if (!container) return;
+
+        const status = data.enabled ? 'healthy' : 'error';
+        const statusText = data.enabled ? 'Connected' : 'Disconnected';
+        
+        container.innerHTML = `
+            <div class="debrid-status">
+                <div class="debrid-header">
+                    <i class="fas fa-cloud-download-alt"></i>
+                    <span>AllDebrid Status</span>
+                    <span class="status-badge status-${status}">${statusText}</span>
+                </div>
+                <div class="debrid-info">
+                    <p><strong>User:</strong> ${data.user || 'Unknown'}</p>
+                    <p><strong>Premium:</strong> ${data.premium ? 'Yes' : 'No'}</p>
+                    <p><strong>Expires:</strong> ${data.expiration || 'Unknown'}</p>
+                </div>
+            </div>
+        `;
     }
 
     updateCacheStats(data) {
@@ -787,6 +817,7 @@ class StremioAddonUI {
                     tmdb: document.getElementById('tmdb-api-key').value,
                     subdl: document.getElementById('subdl-api-key').value,
                     realdebrid: document.getElementById('realdebrid-api-key').value,
+                    alldebrid: document.getElementById('alldebrid-api-key').value,
                     jackett: document.getElementById('jackett-api-key').value
                 },
                 jackettUrl: document.getElementById('jackett-url').value
@@ -988,8 +1019,7 @@ class StremioAddonUI {
                 resultsDiv.innerHTML = `
                     <div class="test-success">
                         <h4>✓ Found ${result.streams.length} stream(s)</h4>
-                        <pre>${JSON.stringify(result.streams, null, 2)}</pre>
-                    </div>
+                        <pre>${JSON.stringify(result.streams, null, 2)}</div>
                 `;
                 this.showNotification('Torrent search successful', 'success');
             } else {
@@ -1038,6 +1068,7 @@ class StremioAddonUI {
             tmdb: document.getElementById('tmdb-api-key').value,
             subdl: document.getElementById('subdl-api-key').value,
             realdebrid: document.getElementById('realdebrid-api-key').value,
+            alldebrid: document.getElementById('alldebrid-api-key').value,
             jackett: document.getElementById('jackett-api-key').value
         };
 

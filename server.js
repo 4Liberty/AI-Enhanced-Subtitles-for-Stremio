@@ -5,11 +5,27 @@ const express = require('express');
 const { addonBuilder, serveHTTP } = require('stremio-addon-sdk');
 const path = require('path');
 const { getAICorrectedSubtitle, getSubtitleUrlsForStremio, getCachedSubtitleContent, getProgressiveSubtitleContent, aiEnhancementStatus } = require('./lib/subtitleMatcher');
-const { getEnrichedStreams } = require('./lib/streamEnricher');
+const { streamEnricher } = require('./lib/streamEnricher');
 const { generateRealDebridStreams, generateSampleRealDebridStreams } = require('./lib/realDebridSearch');
+const { initializeStreamingProviders } = require('./lib/streamingProviderManager');
 const { setupUIRoutes } = require('./ui-api');
 
 console.log("Starting Stremio AI Subtitle Addon v2.9.1 with Beautiful UI...");
+
+// Initialize streaming providers with MediaFusion-inspired architecture
+const streamingConfig = {
+    realdebrid: {
+        apiKey: process.env.REAL_DEBRID_API_KEY,
+        userIP: process.env.USER_IP || null
+    },
+    alldebrid: {
+        apiKey: process.env.ALL_DEBRID_API_KEY,
+        userIP: process.env.USER_IP || null
+    }
+};
+
+const streamingManager = initializeStreamingProviders(streamingConfig);
+console.log("✅ Streaming providers initialized with MediaFusion architecture");
 
 console.log(`
 ██╗  ██╗██████╗ ██╗     ███████╗██╗     ██╗██╗  ██╗██╗   ██╗██╗     ██╗██╗  ██╗
@@ -29,6 +45,7 @@ const requiredEnvVars = [
 
 const optionalEnvVars = [
     'REAL_DEBRID_API_KEY',
+    'ALL_DEBRID_API_KEY',
     'TMDB_API_KEY'
 ];
 
@@ -60,15 +77,18 @@ if (!process.env.GEMINI_API_KEY) {
 if (!process.env.REAL_DEBRID_API_KEY) {
     console.log("  To get REAL_DEBRID_API_KEY: Visit https://real-debrid.com/api and get an API key");
 }
+if (!process.env.ALL_DEBRID_API_KEY) {
+    console.log("  To get ALL_DEBRID_API_KEY: Visit https://alldebrid.com/api/ and get an API key");
+}
 
 console.log("\n🎨 Beautiful UI will be available at: http://localhost:7000/ui");
 console.log("📊 Advanced health monitoring and settings included!");
 
 const manifest = {
     id: "com.stremio.ai.subtitle.corrector.tr.final",
-    version: "2.9.3",
-    name: "AI Subtitle Corrector (TR) + Real-Debrid",
-    description: "Provides AI-corrected Turkish subtitles with hash matching, multiple sources, Real-Debrid cached streams, and stream provision for reliable hash access.",
+    version: "2.9.5",
+    name: "AI Subtitle Corrector (TR) + Multi-Debrid Enhanced",
+    description: "Provides AI-corrected Turkish subtitles with hash matching, multiple sources, enhanced Real-Debrid & AllDebrid cached streams with MediaFusion architecture, and stream provision for reliable hash access.",
     logo: "https://your-heroku-app.herokuapp.com/logo.svg",
     resources: ["subtitles", "stream"], // Include stream for reliable hash provision
     types: ["movie", "series"],
@@ -83,7 +103,7 @@ const manifest = {
     // Explicitly define what we provide
     provides: {
         subtitles: ["movie", "series"],
-        stream: ["movie", "series"] // For reliable hash-based subtitle matching + Real-Debrid cached streams
+        stream: ["movie", "series"] // For reliable hash-based subtitle matching + Enhanced Multi-Debrid cached streams
     }
 };
 
@@ -136,22 +156,82 @@ const streamHandler = async (args) => {
     
     const streams = [];
     
-    // PRIORITY 1: Real-Debrid cached streams (appear at TOP of list)
+    // PRIORITY 1: Enhanced Real-Debrid cached streams with MediaFusion architecture
     if (process.env.REAL_DEBRID_API_KEY && movieId.startsWith('tt')) {
-        console.log(`[Handler] Searching Real-Debrid for cached streams...`);
+        console.log(`[Handler] Searching Real-Debrid with enhanced MediaFusion architecture...`);
         try {
-            const rdStreams = await generateRealDebridStreams(movieId, 'movie');
-            if (rdStreams && rdStreams.length > 0) {
-                console.log(`[Handler] Found ${rdStreams.length} Real-Debrid cached streams`);
-                streams.push(...rdStreams);
+            // Use enhanced streaming provider manager
+            const cachedSearch = await streamingManager.searchCachedContent(movieId, {
+                type: 'movie',
+                maxResults: 20
+            });
+            
+            if (cachedSearch.success && cachedSearch.totalResults > 0) {
+                console.log(`[Handler] Found ${cachedSearch.totalResults} cached results across providers`);
+                
+                // Convert cached search results to stream format
+                for (const providerResult of cachedSearch.providers) {
+                    if (providerResult.success && providerResult.results.length > 0) {
+                        for (const result of providerResult.results) {
+                            // Enrich stream with MediaFusion patterns
+                            const enrichedStream = await streamEnricher.enrichStream(result, {
+                                preferredProvider: providerResult.provider,
+                                includeSubtitles: true
+                            });
+                            
+                            streams.push({
+                                title: `🎬 ${enrichedStream.filename || result.filename} [${enrichedStream.quality?.resolution || 'Unknown'}]`,
+                                url: enrichedStream.streaming?.streamUrl || `magnet:?xt=urn:btih:${result.hash}`,
+                                quality: enrichedStream.quality?.resolution || 'Unknown',
+                                seeds: 100,
+                                peers: 50,
+                                behaviorHints: {
+                                    notWebReady: !enrichedStream.streaming?.streamUrl,
+                                    realDebrid: true,
+                                    cached: enrichedStream.streaming?.cached || false,
+                                    provider: enrichedStream.streaming?.provider || 'real-debrid'
+                                },
+                                infoHash: result.hash || result.id,
+                                filesize: enrichedStream.size || result.size,
+                                metadata: enrichedStream.metadata
+                            });
+                        }
+                    }
+                }
             } else {
-                console.log(`[Handler] No Real-Debrid cached streams found, using samples`);
-                // Add sample Real-Debrid streams for demonstration
-                const sampleRdStreams = generateSampleRealDebridStreams(movieId);
-                streams.push(...sampleRdStreams);
+                console.log(`[Handler] No cached streams found, using fallback Real-Debrid search`);
+                // Fallback to original Real-Debrid search
+                const rdStreams = await generateRealDebridStreams(movieId, 'movie');
+                if (rdStreams && rdStreams.length > 0) {
+                    console.log(`[Handler] Found ${rdStreams.length} Real-Debrid fallback streams`);
+                    // Enrich fallback streams
+                    const enrichedFallback = await streamEnricher.enrichStreams(rdStreams, {
+                        preferredProvider: 'realdebrid'
+                    });
+                    streams.push(...enrichedFallback);
+                } else {
+                    console.log(`[Handler] No Real-Debrid streams found, using samples`);
+                    // Add sample Real-Debrid streams for demonstration
+                    const sampleRdStreams = generateSampleRealDebridStreams(movieId);
+                    const enrichedSamples = await streamEnricher.enrichStreams(sampleRdStreams, {
+                        preferredProvider: 'realdebrid'
+                    });
+                    streams.push(...enrichedSamples);
+                }
             }
         } catch (e) {
-            console.error(`[Handler] Real-Debrid search error:`, e);
+            console.error(`[Handler] Enhanced Real-Debrid search error:`, e);
+            
+            // Fallback to original implementation
+            try {
+                const rdStreams = await generateRealDebridStreams(movieId, 'movie');
+                if (rdStreams && rdStreams.length > 0) {
+                    console.log(`[Handler] Fallback: Found ${rdStreams.length} Real-Debrid streams`);
+                    streams.push(...rdStreams);
+                }
+            } catch (fallbackError) {
+                console.error(`[Handler] Fallback Real-Debrid search also failed:`, fallbackError);
+            }
         }
     }
     
@@ -546,19 +626,252 @@ app.get('/health', async (req, res) => {
     res.json(checks);
 });
 
+// Enhanced health monitoring endpoints with MediaFusion architecture
+app.get('/api/health', async (req, res) => {
+    try {
+        const healthData = {
+            status: 'ok',
+            timestamp: new Date().toISOString(),
+            services: {
+                gemini: !!process.env.GEMINI_API_KEY,
+                opensubtitles: !!process.env.OPENSUBTITLES_API_KEY,
+                tmdb: !!process.env.TMDB_API_KEY,
+                subdl: !!process.env.SUBDL_API_KEY,
+                realdebrid: !!process.env.REAL_DEBRID_API_KEY
+            },
+            streaming: {
+                providers: streamingManager.getAvailableProviders(),
+                health: await streamingManager.healthCheck()
+            }
+        };
+
+        // Check external services
+        if (healthData.services.tmdb) {
+            try {
+                const fetch = require('node-fetch');
+                const tmdbRes = await fetch(`https://api.themoviedb.org/3/configuration?api_key=${process.env.TMDB_API_KEY}`, {
+                    timeout: 5000
+                });
+                healthData.services.tmdb_online = tmdbRes.ok;
+            } catch { 
+                healthData.services.tmdb_online = false; 
+            }
+        }
+
+        res.json(healthData);
+    } catch (error) {
+        res.status(500).json({
+            status: 'error',
+            timestamp: new Date().toISOString(),
+            error: error.message
+        });
+    }
+});
+
+// Provider status endpoint
+app.get('/api/providers/status', async (req, res) => {
+    try {
+        const stats = await streamingManager.getCacheStats();
+        res.json({
+            success: true,
+            timestamp: new Date().toISOString(),
+            providers: stats
+        });
+    } catch (error) {
+        res.status(500).json({
+            success: false,
+            timestamp: new Date().toISOString(),
+            error: error.message
+        });
+    }
+});
+
+// Provider health check endpoint
+app.get('/api/providers/health', async (req, res) => {
+    try {
+        const health = await streamingManager.healthCheck();
+        res.json({
+            success: true,
+            timestamp: new Date().toISOString(),
+            health
+        });
+    } catch (error) {
+        res.status(500).json({
+            success: false,
+            timestamp: new Date().toISOString(),
+            error: error.message
+        });
+    }
+});
+
+// Search cached content endpoint
+app.get('/api/search/cached', async (req, res) => {
+    try {
+        const { query, type = 'movie', maxResults = 20 } = req.query;
+        
+        if (!query) {
+            return res.status(400).json({
+                success: false,
+                error: 'Query parameter is required'
+            });
+        }
+
+        const results = await streamingManager.searchCachedContent(query, {
+            type,
+            maxResults: parseInt(maxResults)
+        });
+
+        res.json({
+            success: true,
+            timestamp: new Date().toISOString(),
+            query,
+            type,
+            ...results
+        });
+    } catch (error) {
+        res.status(500).json({
+            success: false,
+            timestamp: new Date().toISOString(),
+            error: error.message
+        });
+    }
+});
+
+// Stream enrichment endpoint
+app.post('/api/streams/enrich', async (req, res) => {
+    try {
+        const { streams, options = {} } = req.body;
+        
+        if (!streams || !Array.isArray(streams)) {
+            return res.status(400).json({
+                success: false,
+                error: 'Streams array is required'
+            });
+        }
+
+        const enrichedStreams = await streamEnricher.enrichStreams(streams, options);
+
+        res.json({
+            success: true,
+            timestamp: new Date().toISOString(),
+            enriched: enrichedStreams.length,
+            streams: enrichedStreams
+        });
+    } catch (error) {
+        res.status(500).json({
+            success: false,
+            timestamp: new Date().toISOString(),
+            error: error.message
+        });
+    }
+});
+
+// AllDebrid-specific endpoints
+app.get('/api/health/alldebrid', async (req, res) => {
+    try {
+        const hasApiKey = !!process.env.ALL_DEBRID_API_KEY;
+        
+        if (!hasApiKey) {
+            return res.json({
+                status: 'error',
+                message: 'AllDebrid API key not configured',
+                enabled: false
+            });
+        }
+
+        const providers = streamingManager.getAvailableProviders();
+        const isEnabled = providers.includes('alldebrid');
+
+        if (!isEnabled) {
+            return res.json({
+                status: 'warning',
+                message: 'AllDebrid provider not enabled',
+                enabled: false
+            });
+        }
+
+        // Test AllDebrid connection
+        const { AllDebridClient } = require('./lib/allDebridClient');
+        const client = new AllDebridClient(process.env.ALL_DEBRID_API_KEY);
+        const userInfo = await client.getAccountInfo();
+
+        if (userInfo) {
+            res.json({
+                status: 'healthy',
+                message: 'AllDebrid service operational',
+                enabled: true,
+                user: userInfo.username,
+                premium: userInfo.premium,
+                expiration: userInfo.expiration
+            });
+        } else {
+            res.json({
+                status: 'error',
+                message: 'AllDebrid authentication failed',
+                enabled: false
+            });
+        }
+    } catch (error) {
+        res.status(500).json({
+            status: 'error',
+            message: error.message,
+            enabled: false
+        });
+    }
+});
+
+app.get('/api/alldebrid/status', async (req, res) => {
+    try {
+        const hasApiKey = !!process.env.ALL_DEBRID_API_KEY;
+        
+        if (!hasApiKey) {
+            return res.json({
+                enabled: false,
+                message: 'AllDebrid API key not configured'
+            });
+        }
+
+        const { AllDebridClient } = require('./lib/allDebridClient');
+        const client = new AllDebridClient(process.env.ALL_DEBRID_API_KEY);
+        const userInfo = await client.getAccountInfo();
+
+        res.json({
+            enabled: !!userInfo,
+            user: userInfo?.username || 'Unknown',
+            premium: userInfo?.premium || false,
+            expiration: userInfo?.expiration || 'Unknown',
+            message: userInfo ? 'Connected' : 'Authentication failed'
+        });
+    } catch (error) {
+        res.status(500).json({
+            enabled: false,
+            message: error.message
+        });
+    }
+});
+
 app.listen(port, () => {
-    console.log(`\n🚀 Stremio AI Subtitle & Real-Debrid Addon is running!`);
+    console.log(`\n🚀 Stremio AI Subtitle & Enhanced Real-Debrid Addon is running!`);
     console.log(`📍 Main URL: http://0.0.0.0:${port}`);
     console.log(`🎨 Beautiful UI: http://0.0.0.0:${port}/ui`);
     console.log(`📋 Manifest: http://0.0.0.0:${port}/manifest.json`);
     console.log(`💚 Health: http://0.0.0.0:${port}/health`);
     console.log(`⚙️  Configure: http://0.0.0.0:${port}/configure`);
     console.log(`📝 Subtitle .srt: http://0.0.0.0:${port}/subtitles/:videoId/:language.srt`);
+    console.log(`\n🔧 Enhanced API Endpoints:`);
+    console.log(`   • /api/health - Comprehensive health monitoring`);
+    console.log(`   • /api/providers/status - Provider cache statistics`);
+    console.log(`   • /api/providers/health - Provider health check`);
+    console.log(`   • /api/search/cached - Search cached content`);
+    console.log(`   • /api/streams/enrich - Stream enrichment service`);
+    console.log(`   • /api/health/alldebrid - AllDebrid health check`);
+    console.log(`   • /api/alldebrid/status - AllDebrid status`);
     console.log(`\n✨ Features available:`);
     console.log(`   • AI-powered subtitle correction with Google Gemini`);
-    console.log(`   • Real-Debrid torrent streaming with 20+ providers`);
-    console.log(`   • Web scraping support for 1337x, KAT, MagnetDL`);
-    console.log(`   • Advanced health monitoring & performance metrics`);
+    console.log(`   • Enhanced Real-Debrid with MediaFusion architecture`);
+    console.log(`   • Advanced stream enrichment and quality detection`);
+    console.log(`   • Multi-provider streaming with fallback support`);
+    console.log(`   • Comprehensive health monitoring & performance metrics`);
     console.log(`   • Beautiful modern UI with comprehensive settings`);
     console.log(`   • Real-time system status & error tracking`);
     console.log(`\n🔗 Open http://localhost:${port}/ui to access the control panel!`);
