@@ -57,8 +57,7 @@ const config = {
         enabled: !!process.env.GEMINI_API_KEY,
         name: "Gemini AI",
         apiKey: process.env.GEMINI_API_KEY
-    }
-
+    },
 
     // Subdl API key (for https://api.subdl.com/api/v1/subtitles)
     SUBDL_API_KEY: process.env.SUBDL_API_KEY || null, // If not set, fallback to HTML scrape
