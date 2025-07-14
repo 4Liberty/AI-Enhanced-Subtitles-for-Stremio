@@ -637,7 +637,8 @@ app.get('/api/health', async (req, res) => {
                 opensubtitles: !!process.env.OPENSUBTITLES_API_KEY,
                 tmdb: !!process.env.TMDB_API_KEY,
                 subdl: !!process.env.SUBDL_API_KEY,
-                realdebrid: !!process.env.REAL_DEBRID_API_KEY
+                realdebrid: !!process.env.REAL_DEBRID_API_KEY,
+                alldebrid: !!process.env.ALL_DEBRID_API_KEY
             },
             streaming: {
                 providers: streamingManager.getAvailableProviders(),
