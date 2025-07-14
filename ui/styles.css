@@ -438,6 +438,38 @@ body {
     box-shadow: 0 0 0 3px rgba(33, 150, 243, 0.1);
 }
 
+/* Fix dropdown option colors */
+.form-select option {
+    background: var(--card-color);
+    color: var(--text-primary);
+    border: none;
+}
+
+.form-select option:checked {
+    background: var(--primary-color);
+    color: white;
+}
+
+/* Fix dropdown background on different browsers */
+.form-select {
+    background-image: url("data:image/svg+xml,%3csvg xmlns='http://www.w3.org/2000/svg' fill='none' viewBox='0 0 20 20'%3e%3cpath stroke='%23ffffff' stroke-linecap='round' stroke-linejoin='round' stroke-width='1.5' d='M6 8l4 4 4-4'/%3e%3c/svg%3e");
+    background-position: right 0.75rem center;
+    background-repeat: no-repeat;
+    background-size: 1.5em 1.5em;
+    padding-right: 2.5rem;
+    -webkit-appearance: none;
+    -moz-appearance: none;
+    appearance: none;
+}
+
+/* Ensure proper text color in all states */
+.form-input,
+.form-select,
+.form-input:focus,
+.form-select:focus {
+    color: var(--text-primary) !important;
+}
+
 .form-range {
     width: 100%;
     height: 6px;
@@ -596,6 +628,39 @@ body {
     color: var(--text-secondary);
 }
 
+/* Test result styles */
+.test-loading {
+    color: var(--accent-color);
+    font-style: italic;
+    text-align: center;
+    padding: 1rem;
+}
+
+.test-success {
+    color: var(--success-color);
+}
+
+.test-error {
+    color: var(--error-color);
+}
+
+.test-success h4,
+.test-error h4 {
+    margin-bottom: 0.5rem;
+    font-size: 1rem;
+}
+
+.test-success pre,
+.test-error pre {
+    background: rgba(0, 0, 0, 0.3);
+    padding: 1rem;
+    border-radius: var(--radius);
+    overflow-x: auto;
+    font-size: 0.8rem;
+    max-height: 300px;
+    overflow-y: auto;
+}
+
 /* Provider Lists */
 .providers-list,
 .sources-list {
@@ -663,10 +728,14 @@ body {
 }
 
 .log-item {
-    padding: 0.5rem 0;
-    border-bottom: 1px solid var(--border-color);
+    padding: 0.5rem 0.75rem;
+    background: rgba(255, 255, 255, 0.05);
+    border-radius: var(--radius);
+    margin-bottom: 0.5rem;
     display: flex;
-    gap: 1rem;
+    justify-content: space-between;
+    align-items: center;
+    font-size: 0.9rem;
 }
 
 .log-time {
@@ -676,8 +745,12 @@ body {
 }
 
 .log-message {
-    color: var(--text-secondary);
-    font-size: 0.9rem;
+    flex: 1;
+    margin-left: 1rem;
+}
+
+.log-success {
+    color: var(--success-color);
 }
 
 .log-error {
@@ -686,14 +759,6 @@ body {
 
 .log-warning {
     color: var(--warning-color);
-}
-
-.log-info {
-    color: var(--text-secondary);
-}
-
-.log-success {
-    color: var(--success-color);
 }
 
 /* Charts */
@@ -705,9 +770,22 @@ body {
 
 .chart-container {
     background: rgba(255, 255, 255, 0.05);
-    border-radius: var(--radius);
     padding: 1rem;
+    border-radius: var(--radius);
     height: 200px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    color: var(--text-muted);
+    text-align: center;
+    position: relative;
+}
+
+.chart-container canvas {
+    width: 100% !important;
+    height: 100% !important;
+    max-width: 100%;
+    max-height: 100%;
 }
 
 /* Settings */
@@ -723,37 +801,36 @@ body {
     border-bottom: 1px solid var(--border-color);
 }
 
+.setting-group label {
+    display: block;
+    margin-bottom: 0.5rem;
+    color: var(--text-secondary);
+    font-weight: 500;
+}
+
+.setting-group small {
+    color: var(--text-muted);
+    font-size: 0.8rem;
+    margin-top: 0.25rem;
+    display: block;
+}
+
+.range-group {
+    display: flex;
+    align-items: center;
+    gap: 0.5rem;
+}
+
+.range-group .form-range {
+    flex: 1;
+}
+
 .settings-actions {
     display: flex;
     gap: 1rem;
-    margin-top: 1.5rem;
-    flex-wrap: wrap;
-}
-
-.backup-actions {
-    display: flex;
-    gap: 1rem;
-    margin-bottom: 1rem;
-    flex-wrap: wrap;
-}
-
-.backup-info {
-    padding: 1rem;
-    background: rgba(255, 255, 255, 0.05);
-    border-radius: var(--radius);
-    border-left: 3px solid var(--primary-color);
-}
-
-.backup-info p {
-    color: var(--text-secondary);
-    font-size: 0.9rem;
-}
-
-.error-controls {
-    display: flex;
-    gap: 1rem;
-    margin-bottom: 1rem;
-    flex-wrap: wrap;
+    margin-top: 2rem;
+    padding-top: 1rem;
+    border-top: 1px solid var(--border-color);
 }
 
 /* Footer */
@@ -785,6 +862,48 @@ body {
 
 .footer-section a:hover {
     color: var(--primary-color);
+}
+
+/* Notifications */
+.notification {
+    position: fixed;
+    top: 20px;
+    right: 20px;
+    background: var(--card-color);
+    color: var(--text-primary);
+    padding: 1rem 1.5rem;
+    border-radius: var(--radius);
+    box-shadow: var(--shadow);
+    border-left: 4px solid var(--primary-color);
+    z-index: 10000;
+    display: flex;
+    align-items: center;
+    gap: 0.5rem;
+    animation: slideIn 0.3s ease;
+    max-width: 400px;
+}
+
+.notification-success {
+    border-left-color: var(--success-color);
+}
+
+.notification-error {
+    border-left-color: var(--error-color);
+}
+
+.notification-warning {
+    border-left-color: var(--warning-color);
+}
+
+@keyframes slideIn {
+    from {
+        transform: translateX(100%);
+        opacity: 0;
+    }
+    to {
+        transform: translateX(0);
+        opacity: 1;
+    }
 }
 
 /* Responsive Design */
@@ -847,6 +966,20 @@ body {
         gap: 0.5rem;
         text-align: center;
     }
+
+    .performance-charts {
+        grid-template-columns: 1fr;
+    }
+    
+    .settings-actions {
+        flex-direction: column;
+    }
+    
+    .notification {
+        right: 10px;
+        left: 10px;
+        max-width: none;
+    }
 }
 
 /* Scrollbar Styling */
@@ -880,40 +1013,6 @@ body {
 
 @keyframes spin {
     to { transform: rotate(360deg); }
-}
-
-/* Notification Styles */
-.notification {
-    position: fixed;
-    top: 20px;
-    right: 20px;
-    padding: 1rem 1.5rem;
-    border-radius: var(--radius);
-    color: white;
-    font-weight: 500;
-    z-index: 10000;
-    transform: translateX(100%);
-    transition: var(--transition);
-}
-
-.notification.show {
-    transform: translateX(0);
-}
-
-.notification.success {
-    background: var(--success-color);
-}
-
-.notification.warning {
-    background: var(--warning-color);
-}
-
-.notification.error {
-    background: var(--error-color);
-}
-
-.notification.info {
-    background: var(--primary-color);
 }
 
 /* Accessibility */

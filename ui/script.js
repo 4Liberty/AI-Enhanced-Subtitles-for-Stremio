@@ -23,6 +23,7 @@ class StremioAddonUI {
         this.populateProviders();
         this.populateSubtitleSources();
         this.showNotification('System initialized successfully', 'success');
+        this.initializeCharts();
     }
 
     setupEventListeners() {
@@ -84,6 +85,7 @@ class StremioAddonUI {
                 this.updateTorrentsTab();
                 break;
             case 'health':
+                this.initializeCharts();
                 this.updateHealthTab();
                 break;
             case 'settings':
@@ -113,6 +115,25 @@ class StremioAddonUI {
             console.error('Error updating dashboard:', error);
             this.showNotification('Failed to update dashboard - ' + error.message, 'error');
         }
+    }
+
+    async fetchStats() {
+        try {
+            const response = await fetch('/api/stats');
+            if (!response.ok) {
+                throw new Error(`HTTP error! status: ${response.status}`);
+            }
+            return await response.json();
+        } catch (error) {
+            console.error('Error fetching stats:', error);
+            return null;
+        }
+    }
+
+    formatUptime(seconds) {
+        const hours = Math.floor(seconds / 3600);
+        const minutes = Math.floor((seconds % 3600) / 60);
+        return `${hours}h ${minutes}m`;
     }
 
     async updateSystemStatus() {
@@ -249,6 +270,9 @@ class StremioAddonUI {
             this.updateHealthScore(healthData);
             this.updateHealthChecks(healthData.checks);
             this.updateErrorLogs(healthData.errors);
+            
+            // Update performance charts
+            this.updatePerformanceCharts();
 
         } catch (error) {
             console.error('Error updating health tab:', error);
@@ -463,238 +487,255 @@ class StremioAddonUI {
         });
     }
 
-    loadSettings() {
-        const saved = localStorage.getItem('stremio-addon-settings');
-        if (saved) {
-            this.settings = JSON.parse(saved);
-            this.applySettings();
+    async saveSettings() {
+        try {
+            const settings = {
+                aiProvider: document.getElementById('ai-provider').value,
+                aiModel: document.getElementById('ai-model').value,
+                correctionIntensity: document.getElementById('correction-intensity').value,
+                aiTemperature: document.getElementById('ai-temperature').value,
+                primaryLanguage: document.getElementById('primary-language').value,
+                fallbackLanguage: document.getElementById('fallback-language').value,
+                autoTranslate: document.getElementById('auto-translate').checked,
+                hearingImpaired: document.getElementById('hearing-impaired').checked,
+                aiEnabled: document.getElementById('ai-enabled').checked,
+                debugMode: document.getElementById('debug-mode').checked,
+                scrapingEnabled: document.getElementById('scraping-enabled').checked,
+                cacheEnabled: document.getElementById('cache-enabled').checked,
+                maxConcurrentRequests: document.getElementById('max-concurrent-requests').value,
+                requestTimeout: document.getElementById('request-timeout').value,
+                minSubtitleScore: document.getElementById('min-subtitle-score').value,
+                apiKeys: {
+                    gemini: document.getElementById('gemini-api-key').value,
+                    openai: document.getElementById('openai-api-key').value,
+                    claude: document.getElementById('claude-api-key').value,
+                    opensubtitles: document.getElementById('opensubtitles-api-key').value,
+                    tmdb: document.getElementById('tmdb-api-key').value,
+                    subdl: document.getElementById('subdl-api-key').value,
+                    realdebrid: document.getElementById('realdebrid-api-key').value,
+                    jackett: document.getElementById('jackett-api-key').value
+                },
+                jackettUrl: document.getElementById('jackett-url').value
+            };
+
+            const response = await fetch('/api/settings', {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json',
+                },
+                body: JSON.stringify(settings)
+            });
+
+            if (response.ok) {
+                this.showNotification('Settings saved successfully', 'success');
+                // Store locally as well
+                localStorage.setItem('stremio-addon-settings', JSON.stringify(settings));
+            } else {
+                throw new Error('Failed to save settings');
+            }
+        } catch (error) {
+            console.error('Error saving settings:', error);
+            this.showNotification('Failed to save settings: ' + error.message, 'error');
         }
     }
 
-    saveSettings() {
-        const settings = {
-            primaryLanguage: document.getElementById('primary-language')?.value,
-            fallbackLanguage: document.getElementById('fallback-language')?.value,
-            aiEnabled: document.getElementById('ai-enabled')?.checked,
-            aiModel: document.getElementById('ai-model')?.value,
-            correctionIntensity: document.getElementById('correction-intensity')?.value,
-            debugMode: document.getElementById('debug-mode')?.checked,
-            scrapingEnabled: document.getElementById('scraping-enabled')?.checked,
-            cacheEnabled: document.getElementById('cache-enabled')?.checked,
-            maxConcurrentRequests: document.getElementById('max-concurrent-requests')?.value,
-            requestTimeout: document.getElementById('request-timeout')?.value,
-            geminiApiKey: document.getElementById('gemini-api-key')?.value,
-            opensubtitlesApiKey: document.getElementById('opensubtitles-api-key')?.value,
-            tmdbApiKey: document.getElementById('tmdb-api-key')?.value,
-            subdlApiKey: document.getElementById('subdl-api-key')?.value,
-            realdebridApiKey: document.getElementById('realdebrid-api-key')?.value,
-            jackettUrl: document.getElementById('jackett-url')?.value,
-            jackettApiKey: document.getElementById('jackett-api-key')?.value
-        };
-
-        this.settings = settings;
-        localStorage.setItem('stremio-addon-settings', JSON.stringify(settings));
-        this.showNotification('Settings saved successfully', 'success');
-    }
-
-    applySettings() {
-        Object.keys(this.settings).forEach(key => {
-            const element = document.getElementById(key.replace(/([A-Z])/g, '-$1').toLowerCase());
-            if (element) {
-                if (element.type === 'checkbox') {
-                    element.checked = this.settings[key];
-                } else {
-                    element.value = this.settings[key] || '';
+    async loadSettings() {
+        try {
+            // Try to load from server first
+            const response = await fetch('/api/settings');
+            let settings = null;
+            
+            if (response.ok) {
+                settings = await response.json();
+            } else {
+                // Fallback to local storage
+                const stored = localStorage.getItem('stremio-addon-settings');
+                if (stored) {
+                    settings = JSON.parse(stored);
                 }
             }
-        });
+
+            if (settings) {
+                this.applySettings(settings);
+            }
+        } catch (error) {
+            console.error('Error loading settings:', error);
+            // Try local storage as fallback
+            const stored = localStorage.getItem('stremio-addon-settings');
+            if (stored) {
+                this.applySettings(JSON.parse(stored));
+            }
+        }
     }
 
-    updateSettingsTab() {
-        this.applySettings();
+    applySettings(settings) {
+        // Apply AI settings
+        if (settings.aiProvider) document.getElementById('ai-provider').value = settings.aiProvider;
+        if (settings.aiModel) document.getElementById('ai-model').value = settings.aiModel;
+        if (settings.correctionIntensity) {
+            document.getElementById('correction-intensity').value = settings.correctionIntensity;
+            document.querySelector('#correction-intensity + .range-value').textContent = settings.correctionIntensity;
+        }
+        if (settings.aiTemperature) {
+            document.getElementById('ai-temperature').value = settings.aiTemperature;
+            document.querySelector('#ai-temperature + .range-value').textContent = settings.aiTemperature;
+        }
+
+        // Apply language settings
+        if (settings.primaryLanguage) document.getElementById('primary-language').value = settings.primaryLanguage;
+        if (settings.fallbackLanguage) document.getElementById('fallback-language').value = settings.fallbackLanguage;
+        if (settings.autoTranslate !== undefined) document.getElementById('auto-translate').checked = settings.autoTranslate;
+        if (settings.hearingImpaired !== undefined) document.getElementById('hearing-impaired').checked = settings.hearingImpaired;
+
+        // Apply advanced settings
+        if (settings.aiEnabled !== undefined) document.getElementById('ai-enabled').checked = settings.aiEnabled;
+        if (settings.debugMode !== undefined) document.getElementById('debug-mode').checked = settings.debugMode;
+        if (settings.scrapingEnabled !== undefined) document.getElementById('scraping-enabled').checked = settings.scrapingEnabled;
+        if (settings.cacheEnabled !== undefined) document.getElementById('cache-enabled').checked = settings.cacheEnabled;
+        if (settings.maxConcurrentRequests) document.getElementById('max-concurrent-requests').value = settings.maxConcurrentRequests;
+        if (settings.requestTimeout) document.getElementById('request-timeout').value = settings.requestTimeout;
+        if (settings.minSubtitleScore) {
+            document.getElementById('min-subtitle-score').value = settings.minSubtitleScore;
+            document.querySelector('#min-subtitle-score + .range-value').textContent = settings.minSubtitleScore;
+        }
+
+        // Apply API keys (only if they exist)
+        if (settings.apiKeys) {
+            Object.entries(settings.apiKeys).forEach(([key, value]) => {
+                if (value) {
+                    const element = document.getElementById(`${key}-api-key`);
+                    if (element) element.value = value;
+                }
+            });
+        }
+
+        // Apply Jackett URL
+        if (settings.jackettUrl) document.getElementById('jackett-url').value = settings.jackettUrl;
+
+        console.log('Settings applied successfully');
     }
 
     showNotification(message, type = 'info') {
+        // Create notification element
         const notification = document.createElement('div');
-        notification.className = `notification ${type}`;
-        notification.textContent = message;
-        
+        notification.className = `notification notification-${type}`;
+        notification.innerHTML = `
+            <i class="fas fa-${type === 'success' ? 'check' : type === 'error' ? 'times' : 'info'}"></i>
+            <span>${message}</span>
+        `;
+
+        // Add to page
         document.body.appendChild(notification);
-        
+
+        // Auto-remove after 5 seconds
         setTimeout(() => {
-            notification.classList.add('show');
-        }, 100);
-        
-        setTimeout(() => {
-            notification.classList.remove('show');
-            setTimeout(() => {
-                document.body.removeChild(notification);
-            }, 300);
-        }, 3000);
+            notification.remove();
+        }, 5000);
     }
 
     // API Functions
     async testSubtitleSearch() {
         const imdbId = document.getElementById('test-imdb').value;
         const language = document.getElementById('test-language').value;
+        const resultsDiv = document.getElementById('subtitle-test-results');
         
         if (!imdbId) {
-            this.showNotification('Please enter an IMDb ID', 'warning');
+            this.showNotification('Please enter an IMDb ID', 'error');
             return;
         }
 
-        const resultsContainer = document.getElementById('subtitle-test-results');
-        resultsContainer.innerHTML = '<div class="loading"></div> Testing subtitle search...';
-        resultsContainer.classList.add('show');
+        resultsDiv.innerHTML = '<div class="test-loading">Testing subtitle search...</div>';
+        resultsDiv.classList.add('show');
 
         try {
-            const response = await fetch(`/api/subtitles/test?imdb=${imdbId}&lang=${language}`);
-            const data = await response.json();
+            const response = await fetch('/api/test/subtitle', {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json',
+                },
+                body: JSON.stringify({ imdbId, language })
+            });
+
+            const result = await response.json();
             
-            resultsContainer.innerHTML = `
-                <h4>Test Results</h4>
-                <pre>${JSON.stringify(data, null, 2)}</pre>
-            `;
-            
-            this.addToActivityLog(`Subtitle search test: ${imdbId} (${language})`, 'info');
-            this.showNotification('Subtitle test completed', 'success');
+            if (response.ok && result.subtitles && result.subtitles.length > 0) {
+                resultsDiv.innerHTML = `
+                    <div class="test-success">
+                        <h4>✓ Found ${result.subtitles.length} subtitle(s)</h4>
+                        <pre>${JSON.stringify(result.subtitles, null, 2)}</pre>
+                    </div>
+                `;
+                this.showNotification('Subtitle search successful', 'success');
+            } else {
+                resultsDiv.innerHTML = `
+                    <div class="test-error">
+                        <h4>⚠ No subtitles found</h4>
+                        <pre>${JSON.stringify(result, null, 2)}</pre>
+                    </div>
+                `;
+                this.showNotification('No subtitles found', 'warning');
+            }
         } catch (error) {
-            resultsContainer.innerHTML = `<div class="log-error">Error: ${error.message}</div>`;
-            this.showNotification('Subtitle test failed', 'error');
+            resultsDiv.innerHTML = `
+                <div class="test-error">
+                    <h4>✗ Test failed</h4>
+                    <pre>${error.message}</pre>
+                </div>
+            `;
+            this.showNotification('Test failed: ' + error.message, 'error');
         }
     }
 
     async testTorrentSearch() {
         const imdbId = document.getElementById('torrent-test-imdb').value;
         const quality = document.getElementById('torrent-test-quality').value;
+        const resultsDiv = document.getElementById('torrent-test-results');
         
         if (!imdbId) {
-            this.showNotification('Please enter an IMDb ID', 'warning');
+            this.showNotification('Please enter an IMDb ID', 'error');
             return;
         }
 
-        const resultsContainer = document.getElementById('torrent-test-results');
-        resultsContainer.innerHTML = '<div class="loading"></div> Testing torrent search...';
-        resultsContainer.classList.add('show');
+        resultsDiv.innerHTML = '<div class="test-loading">Testing torrent search...</div>';
+        resultsDiv.classList.add('show');
 
         try {
-            const response = await fetch(`/api/torrents/test?imdb=${imdbId}&quality=${quality}`);
-            const data = await response.json();
-            
-            resultsContainer.innerHTML = `
-                <h4>Test Results</h4>
-                <pre>${JSON.stringify(data, null, 2)}</pre>
-            `;
-            
-            this.addToActivityLog(`Torrent search test: ${imdbId} (${quality || 'all'})`, 'info');
-            this.showNotification('Torrent test completed', 'success');
-        } catch (error) {
-            resultsContainer.innerHTML = `<div class="log-error">Error: ${error.message}</div>`;
-            this.showNotification('Torrent test failed', 'error');
-        }
-    }
-
-    async testApiKeys() {
-        this.showNotification('Testing API keys...', 'info');
-        
-        try {
-            const response = await fetch('/api/test-keys', {
+            const response = await fetch('/api/test/torrent', {
                 method: 'POST',
-                headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify(this.settings)
+                headers: {
+                    'Content-Type': 'application/json',
+                },
+                body: JSON.stringify({ imdbId, quality })
             });
+
+            const result = await response.json();
             
-            const results = await response.json();
-            
-            let message = 'API Key Test Results:\n';
-            Object.keys(results).forEach(key => {
-                message += `${key}: ${results[key] ? '✓' : '✗'}\n`;
-            });
-            
-            this.showNotification('API key test completed', 'success');
-            this.addToActivityLog('API keys tested', 'info');
-        } catch (error) {
-            this.showNotification('API key test failed', 'error');
-        }
-    }
-
-    async clearCache() {
-        if (!confirm('Are you sure you want to clear the cache?')) return;
-        
-        try {
-            await fetch('/api/cache/clear', { method: 'POST' });
-            this.showNotification('Cache cleared successfully', 'success');
-            this.addToActivityLog('Cache cleared', 'info');
-            this.updateTorrentsTab();
-        } catch (error) {
-            this.showNotification('Failed to clear cache', 'error');
-        }
-    }
-
-    clearErrorLogs() {
-        if (!confirm('Are you sure you want to clear error logs?')) return;
-        
-        const container = document.getElementById('error-logs');
-        const logsContainer = container.querySelector('.error-logs') || container;
-        logsContainer.innerHTML = '<div class="log-item"><span class="log-time">System</span><span class="log-message log-success">Logs cleared</span></div>';
-        
-        this.showNotification('Error logs cleared', 'success');
-    }
-
-    exportErrorLogs() {
-        const logs = this.activityLog.map(log => `${log.timestamp.toISOString()}: ${log.message}`).join('\n');
-        const blob = new Blob([logs], { type: 'text/plain' });
-        const url = URL.createObjectURL(blob);
-        
-        const a = document.createElement('a');
-        a.href = url;
-        a.download = 'stremio-addon-logs.txt';
-        a.click();
-        
-        URL.revokeObjectURL(url);
-        this.showNotification('Logs exported', 'success');
-    }
-
-    exportConfig() {
-        const config = {
-            settings: this.settings,
-            timestamp: new Date().toISOString(),
-            version: '1.0.0'
-        };
-        
-        const blob = new Blob([JSON.stringify(config, null, 2)], { type: 'application/json' });
-        const url = URL.createObjectURL(blob);
-        
-        const a = document.createElement('a');
-        a.href = url;
-        a.download = 'stremio-addon-config.json';
-        a.click();
-        
-        URL.revokeObjectURL(url);
-        this.showNotification('Configuration exported', 'success');
-    }
-
-    importConfig() {
-        document.getElementById('config-file').click();
-    }
-
-    handleConfigImport(event) {
-        const file = event.target.files[0];
-        if (!file) return;
-
-        const reader = new FileReader();
-        reader.onload = (e) => {
-            try {
-                const config = JSON.parse(e.target.result);
-                this.settings = config.settings;
-                this.applySettings();
-                this.saveSettings();
-                this.showNotification('Configuration imported successfully', 'success');
-            } catch (error) {
-                this.showNotification('Invalid configuration file', 'error');
+            if (response.ok && result.streams && result.streams.length > 0) {
+                resultsDiv.innerHTML = `
+                    <div class="test-success">
+                        <h4>✓ Found ${result.streams.length} stream(s)</h4>
+                        <pre>${JSON.stringify(result.streams, null, 2)}</pre>
+                    </div>
+                `;
+                this.showNotification('Torrent search successful', 'success');
+            } else {
+                resultsDiv.innerHTML = `
+                    <div class="test-error">
+                        <h4>⚠ No streams found</h4>
+                        <pre>${JSON.stringify(result, null, 2)}</pre>
+                    </div>
+                `;
+                this.showNotification('No streams found', 'warning');
             }
-        };
-        reader.readAsText(file);
+        } catch (error) {
+            resultsDiv.innerHTML = `
+                <div class="test-error">
+                    <h4>✗ Test failed</h4>
+                    <pre>${error.message}</pre>
+                </div>
+            `;
+            this.showNotification('Test failed: ' + error.message, 'error');
+        }
     }
 
     toggleVisibility(inputId) {
@@ -713,11 +754,287 @@ class StremioAddonUI {
         }
     }
 
-    destroy() {
-        if (this.refreshInterval) {
-            clearInterval(this.refreshInterval);
+    async testApiKeys() {
+        const results = {};
+        const keys = {
+            gemini: document.getElementById('gemini-api-key').value,
+            openai: document.getElementById('openai-api-key').value,
+            claude: document.getElementById('claude-api-key').value,
+            opensubtitles: document.getElementById('opensubtitles-api-key').value,
+            tmdb: document.getElementById('tmdb-api-key').value,
+            subdl: document.getElementById('subdl-api-key').value,
+            realdebrid: document.getElementById('realdebrid-api-key').value,
+            jackett: document.getElementById('jackett-api-key').value
+        };
+
+        this.showNotification('Testing API keys...', 'info');
+
+        for (const [key, value] of Object.entries(keys)) {
+            if (value && value !== '***') {
+                try {
+                    // Test each API key
+                    const response = await fetch(`/api/test/key/${key}`, {
+                        method: 'POST',
+                        headers: {
+                            'Content-Type': 'application/json',
+                        },
+                        body: JSON.stringify({ apiKey: value })
+                    });
+
+                    const result = await response.json();
+                    results[key] = result.success ? 'Valid' : 'Invalid';
+                } catch (error) {
+                    results[key] = 'Error';
+                }
+            } else {
+                results[key] = 'Not set';
+            }
+        }
+
+        let message = 'API Key Test Results:\n';
+        Object.entries(results).forEach(([key, result]) => {
+            message += `${key}: ${result}\n`;
+        });
+
+        this.showNotification(message, 'info');
+    }
+
+    exportConfig() {
+        const settings = {
+            aiProvider: document.getElementById('ai-provider').value,
+            aiModel: document.getElementById('ai-model').value,
+            correctionIntensity: document.getElementById('correction-intensity').value,
+            // ... other settings
+        };
+
+        const dataStr = JSON.stringify(settings, null, 2);
+        const dataUri = 'data:application/json;charset=utf-8,'+ encodeURIComponent(dataStr);
+        
+        const exportFileDefaultName = 'stremio-addon-config.json';
+        
+        const linkElement = document.createElement('a');
+        linkElement.setAttribute('href', dataUri);
+        linkElement.setAttribute('download', exportFileDefaultName);
+        linkElement.click();
+    }
+
+    importConfig() {
+        document.getElementById('config-file').click();
+    }
+
+    handleConfigImport(event) {
+        const file = event.target.files[0];
+        if (file) {
+            const reader = new FileReader();
+            reader.onload = (e) => {
+                try {
+                    const config = JSON.parse(e.target.result);
+                    this.applySettings(config);
+                    this.showNotification('Configuration imported successfully', 'success');
+                } catch (error) {
+                    this.showNotification('Failed to import configuration: ' + error.message, 'error');
+                }
+            };
+            reader.readAsText(file);
         }
     }
+
+    clearErrorLogs() {
+        document.getElementById('error-logs').innerHTML = '<div class="log-item"><span class="log-time">System</span><span class="log-message log-success">Error logs cleared</span></div>';
+        this.showNotification('Error logs cleared', 'success');
+    }
+
+    exportErrorLogs() {
+        const logs = Array.from(document.querySelectorAll('.log-item')).map(item => {
+            const time = item.querySelector('.log-time').textContent;
+            const message = item.querySelector('.log-message').textContent;
+            return { time, message };
+        });
+
+        const dataStr = JSON.stringify(logs, null, 2);
+        const dataUri = 'data:application/json;charset=utf-8,'+ encodeURIComponent(dataStr);
+        
+        const linkElement = document.createElement('a');
+        linkElement.setAttribute('href', dataUri);
+        linkElement.setAttribute('download', 'error-logs.json');
+        linkElement.click();
+    }
+
+    clearCache() {
+        fetch('/api/cache/clear', { method: 'POST' })
+            .then(response => response.json())
+            .then(data => {
+                this.showNotification('Cache cleared successfully', 'success');
+                this.updateTorrentsTab();
+            })
+            .catch(error => {
+                this.showNotification('Failed to clear cache: ' + error.message, 'error');
+            });
+    }
+
+    startHealthMonitoring() {
+        // Update health data every 30 seconds
+        this.refreshInterval = setInterval(() => {
+            if (this.currentTab === 'dashboard') {
+                this.updateDashboard();
+            } else if (this.currentTab === 'health') {
+                this.updateHealthTab();
+            }
+        }, 30000);
+    }
+
+    updateSettingsTab() {
+        // Settings tab is mostly static, no need to update
+        console.log('Settings tab loaded');
+    }
+
+    // Simple chart implementation
+    createSimpleChart(canvasId, data, options = {}) {
+        const canvas = document.getElementById(canvasId);
+        if (!canvas) return;
+        
+        const ctx = canvas.getContext('2d');
+        const { width, height } = canvas;
+        
+        // Clear canvas
+        ctx.clearRect(0, 0, width, height);
+        
+        // Set defaults
+        const color = options.color || '#2196F3';
+        const label = options.label || 'Data';
+        const maxPoints = options.maxPoints || 50;
+        
+        // Prepare data
+        const points = data.slice(-maxPoints);
+        if (points.length === 0) {
+            ctx.fillStyle = '#757575';
+            ctx.font = '14px Arial';
+            ctx.textAlign = 'center';
+            ctx.fillText('No data available', width / 2, height / 2);
+            return;
+        }
+        
+        const max = Math.max(...points);
+        const min = Math.min(...points);
+        const range = max - min || 1;
+        
+        // Draw grid
+        ctx.strokeStyle = '#404040';
+        ctx.lineWidth = 1;
+        
+        // Vertical lines
+        for (let i = 0; i <= 10; i++) {
+            const x = (i / 10) * width;
+            ctx.beginPath();
+            ctx.moveTo(x, 0);
+            ctx.lineTo(x, height);
+            ctx.stroke();
+        }
+        
+        // Horizontal lines
+        for (let i = 0; i <= 5; i++) {
+            const y = (i / 5) * height;
+            ctx.beginPath();
+            ctx.moveTo(0, y);
+            ctx.lineTo(width, y);
+            ctx.stroke();
+        }
+        
+        // Draw line
+        ctx.strokeStyle = color;
+        ctx.lineWidth = 2;
+        ctx.beginPath();
+        
+        points.forEach((point, index) => {
+            const x = (index / (points.length - 1)) * width;
+            const y = height - ((point - min) / range) * height;
+            
+            if (index === 0) {
+                ctx.moveTo(x, y);
+            } else {
+                ctx.lineTo(x, y);
+            }
+        });
+        
+        ctx.stroke();
+        
+        // Draw points
+        ctx.fillStyle = color;
+        points.forEach((point, index) => {
+            const x = (index / (points.length - 1)) * width;
+            const y = height - ((point - min) / range) * height;
+            
+            ctx.beginPath();
+            ctx.arc(x, y, 3, 0, 2 * Math.PI);
+            ctx.fill();
+        });
+        
+        // Draw labels
+        ctx.fillStyle = '#B0B0B0';
+        ctx.font = '12px Arial';
+        ctx.textAlign = 'left';
+        ctx.fillText(`${label}: ${points[points.length - 1]}`, 10, 20);
+        ctx.fillText(`Max: ${max}`, 10, 35);
+        ctx.fillText(`Min: ${min}`, 10, 50);
+    }
+
+    // Update performance charts
+    updatePerformanceCharts() {
+        if (this.currentTab !== 'health') return;
+        
+        // Create sample data for demonstration
+        const now = Date.now();
+        const responseTimeData = this.performanceData.responseTime.length > 0 
+            ? this.performanceData.responseTime 
+            : Array.from({ length: 20 }, (_, i) => Math.random() * 100 + 50);
+        
+        const successRateData = this.performanceData.successRate.length > 0 
+            ? this.performanceData.successRate 
+            : Array.from({ length: 20 }, (_, i) => 95 + Math.random() * 5);
+        
+        this.createSimpleChart('response-time-chart', responseTimeData, {
+            color: '#2196F3',
+            label: 'Response Time (ms)'
+        });
+        
+        this.createSimpleChart('success-rate-chart', successRateData, {
+            color: '#4CAF50',
+            label: 'Success Rate (%)'
+        });
+    }
+
+    initializeCharts() {
+        // Initialize canvas elements for charts
+        const responseTimeCanvas = document.getElementById('response-time-chart');
+        const successRateCanvas = document.getElementById('success-rate-chart');
+        
+        if (responseTimeCanvas) {
+            const container = responseTimeCanvas.parentElement;
+            responseTimeCanvas.width = container.offsetWidth - 32; // Account for padding
+            responseTimeCanvas.height = container.offsetHeight - 32;
+        }
+        
+        if (successRateCanvas) {
+            const container = successRateCanvas.parentElement;
+            successRateCanvas.width = container.offsetWidth - 32; // Account for padding
+            successRateCanvas.height = container.offsetHeight - 32;
+        }
+        
+        // Add resize observer to handle window resize
+        if (window.ResizeObserver) {
+            const resizeObserver = new ResizeObserver(() => {
+                setTimeout(() => {
+                    this.initializeCharts();
+                    this.updatePerformanceCharts();
+                }, 100);
+            });
+            
+            if (responseTimeCanvas) resizeObserver.observe(responseTimeCanvas.parentElement);
+            if (successRateCanvas) resizeObserver.observe(successRateCanvas.parentElement);
+        }
+    }
+
+    // ...existing code...
 }
 
 // Global functions for HTML onclick handlers
@@ -729,46 +1046,6 @@ function testTorrentSearch() {
     window.stremioUI.testTorrentSearch();
 }
 
-function testApiKeys() {
-    window.stremioUI.testApiKeys();
-}
-
-function saveSettings() {
-    window.stremioUI.saveSettings();
-}
-
-function clearCache() {
-    window.stremioUI.clearCache();
-}
-
-function clearErrorLogs() {
-    window.stremioUI.clearErrorLogs();
-}
-
-function exportErrorLogs() {
-    window.stremioUI.exportErrorLogs();
-}
-
-function exportConfig() {
-    window.stremioUI.exportConfig();
-}
-
-function importConfig() {
-    window.stremioUI.importConfig();
-}
-
 function toggleVisibility(inputId) {
     window.stremioUI.toggleVisibility(inputId);
 }
-
-// Initialize the UI when the DOM is loaded
-document.addEventListener('DOMContentLoaded', () => {
-    window.stremioUI = new StremioAddonUI();
-});
-
-// Clean up on page unload
-window.addEventListener('beforeunload', () => {
-    if (window.stremioUI) {
-        window.stremioUI.destroy();
-    }
-});
