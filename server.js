@@ -1085,7 +1085,7 @@ app.get('/api/environment/status', (req, res) => {
             },
             alldebrid: {
                 available: !!process.env.ALLDEBRID_API_KEY,
-                source: process.env.ALLDEBRID_API_KEY ? 'environment' : 'none'
+                source: process.env.ALL_DEBRID_API_KEY ? 'environment' : 'none'
             },
             opensubtitles: {
                 available: !!process.env.OPENSUBTITLES_API_KEY,
@@ -1097,6 +1097,62 @@ app.get('/api/environment/status', (req, res) => {
         res.json(envStatus);
     } catch (error) {
         res.status(500).json({ error: 'Failed to get environment status' });
+    }
+});
+
+// Dashboard API endpoint for UI
+app.get('/api/dashboard', async (req, res) => {
+    try {
+        const uptime = process.uptime();
+        const memUsage = process.memoryUsage();
+        
+        // Get performance metrics
+        const avgResponseTime = performanceMetrics.responseTimes.length > 0 
+            ? performanceMetrics.responseTimes.reduce((a, b) => a + b, 0) / performanceMetrics.responseTimes.length 
+            : 0;
+        
+        const successRate = performanceMetrics.requestCount > 0 
+            ? (performanceMetrics.successCount / performanceMetrics.requestCount) * 100 
+            : 0;
+        
+        // Count active providers
+        const activeProviders = [
+            !!process.env.OPENSUBTITLES_API_KEY,
+            !!process.env.SUBDL_API_KEY,
+            !!process.env.REAL_DEBRID_API_KEY,
+            !!process.env.ALL_DEBRID_API_KEY,
+            !!process.env.GEMINI_API_KEY
+        ].filter(Boolean).length;
+        
+        const dashboardData = {
+            status: 'online',
+            uptime: uptime,
+            subtitlesProcessed: performanceMetrics.successCount || 0,
+            torrentsFound: 0, // This would be populated from actual torrent searches
+            activeProviders: activeProviders,
+            performance: {
+                responseTime: Math.round(avgResponseTime * 100) / 100,
+                successRate: Math.round(successRate * 100) / 100,
+                memoryUsage: Math.round(memUsage.heapUsed / 1024 / 1024), // MB
+                activeConnections: performanceMetrics.connections || 0
+            },
+            services: {
+                opensubtitles: !!process.env.OPENSUBTITLES_API_KEY,
+                subdl: !!process.env.SUBDL_API_KEY,
+                gemini: !!process.env.GEMINI_API_KEY,
+                realdebrid: !!process.env.REAL_DEBRID_API_KEY,
+                alldebrid: !!process.env.ALL_DEBRID_API_KEY,
+                tmdb: !!process.env.TMDB_API_KEY
+            }
+        };
+        
+        res.json(dashboardData);
+    } catch (error) {
+        console.error('Dashboard API error:', error);
+        res.status(500).json({ 
+            error: 'Failed to get dashboard data',
+            status: 'error'
+        });
     }
 });
 
@@ -1130,21 +1186,6 @@ app.get('/api/config', (req, res) => {
         res.status(500).json({ error: 'Failed to get configuration' });
     }
 });
-
-// Initialize streaming providers with MediaFusion-inspired architecture
-const streamingConfig = {
-    realdebrid: {
-        apiKey: process.env.REAL_DEBRID_API_KEY,
-        userIP: process.env.USER_IP || null
-    },
-    alldebrid: {
-        apiKey: process.env.ALL_DEBRID_API_KEY,
-        userIP: process.env.USER_IP || null
-    }
-};
-
-const streamingManager = initializeStreamingProviders(streamingConfig);
-console.log("✅ Streaming providers initialized with MediaFusion architecture");
 
 // User configuration management
 let userConfig = {
@@ -1185,6 +1226,7 @@ app.listen(port, () => {
     console.log(`   • /api/performance/metrics - Performance metrics`);
     console.log(`   • /api/environment/status - Environment status`);
     console.log(`   • /api/config - Enhanced configuration`);
+    console.log(`   • /api/dashboard - Dashboard data for UI`);
     console.log(`\n✨ Features available:`);
     console.log(`   • AI-powered subtitle correction with Google Gemini`);
     console.log(`   • Enhanced Real-Debrid with MediaFusion architecture`);

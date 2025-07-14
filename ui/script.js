@@ -403,6 +403,61 @@ class StremioAddonUI {
 
     // Update performance metrics safely
     updatePerformanceMetrics(data) {
+        if (!data || !data.performance) return;
+        
+        const perf = data.performance;
+        
+        // Update response time
+        this.updateElementSafely('avg-response-time', `${perf.responseTime || 0}ms`);
+        
+        // Update success rate
+        this.updateElementSafely('success-rate', `${perf.successRate || 0}%`);
+        
+        // Update memory usage
+        this.updateElementSafely('memory-usage', `${perf.memoryUsage || 0}MB`);
+        
+        // Update active connections
+        this.updateElementSafely('active-connections', perf.activeConnections || 0);
+        
+        // Add to performance data arrays
+        if (perf.responseTime !== undefined) {
+            this.performanceData.responseTime.push(perf.responseTime);
+            if (this.performanceData.responseTime.length > 50) {
+                this.performanceData.responseTime.shift();
+            }
+        }
+        
+        if (perf.successRate !== undefined) {
+            this.performanceData.successRate.push(perf.successRate);
+            if (this.performanceData.successRate.length > 50) {
+                this.performanceData.successRate.shift();
+            }
+        }
+        
+        if (perf.memoryUsage !== undefined) {
+            this.performanceData.memoryUsage.push(perf.memoryUsage);
+            if (this.performanceData.memoryUsage.length > 50) {
+                this.performanceData.memoryUsage.shift();
+            }
+        }
+    }
+
+    // Update system info safely
+    updateSystemInfo(data) {
+        if (!data) return;
+        
+        // Update Node.js version
+        this.updateElementSafely('node-version', process?.version || 'Unknown');
+        
+        // Update uptime
+        this.updateElementSafely('system-uptime', this.formatUptime(data.uptime || 0));
+        
+        // Update server info
+        if (data.services) {
+            const enabledServices = Object.values(data.services).filter(Boolean).length;
+            this.updateElementSafely('enabled-services', enabledServices);
+        }
+    }
     updateActivityDisplay() {
         const container = document.getElementById('activity-list');
         if (!container) return;
@@ -852,6 +907,412 @@ class StremioAddonUI {
         await this.testAllConnections();
         
         console.log('Application initialized successfully');
+    }
+
+    // Health monitoring functions
+    startHealthMonitoring() {
+        if (this.refreshInterval) {
+            clearInterval(this.refreshInterval);
+        }
+        
+        // Update health every 10 seconds
+        this.refreshInterval = setInterval(() => {
+            this.updateDashboard().catch(error => {
+                console.warn('Health monitoring update failed:', error);
+            });
+        }, 10000);
+        
+        console.log('Health monitoring started');
+    }
+
+    // Performance monitoring functions
+    startPerformanceMonitoring() {
+        if (this.performanceInterval) {
+            clearInterval(this.performanceInterval);
+        }
+        
+        // Update performance metrics every 5 seconds
+        this.performanceInterval = setInterval(() => {
+            this.fetchPerformanceMetrics().catch(error => {
+                console.warn('Performance monitoring update failed:', error);
+            });
+        }, 5000);
+        
+        console.log('Performance monitoring started');
+    }
+
+    async fetchPerformanceMetrics() {
+        try {
+            const response = await fetch('/api/performance/metrics');
+            if (response.ok) {
+                const metrics = await response.json();
+                this.updatePerformanceDisplay(metrics);
+            }
+        } catch (error) {
+            console.error('Failed to fetch performance metrics:', error);
+        }
+    }
+
+    updatePerformanceDisplay(metrics) {
+        if (!metrics) return;
+        
+        // Update current metrics
+        this.updateElementSafely('current-memory', `${metrics.memory?.heapUsed || 0}MB`);
+        this.updateElementSafely('current-cpu', `${metrics.cpu?.user || 0}ms`);
+        this.updateElementSafely('total-requests', metrics.requests?.total || 0);
+        this.updateElementSafely('request-success-rate', `${metrics.requests?.successRate || 0}%`);
+    }
+
+    // Load and save settings
+    async loadSettings() {
+        try {
+            const response = await fetch('/api/settings');
+            if (response.ok) {
+                const data = await response.json();
+                this.settings = data.settings || data;
+                this.applySettings(this.settings);
+                console.log('Settings loaded successfully');
+            }
+        } catch (error) {
+            console.error('Failed to load settings:', error);
+            // Use default settings
+            this.settings = this.getDefaultSettings();
+            this.applySettings(this.settings);
+        }
+    }
+
+    async saveSettings() {
+        try {
+            // Collect current settings from form
+            const settings = {
+                aiProvider: document.getElementById('ai-provider')?.value,
+                aiModel: document.getElementById('ai-model')?.value,
+                correctionIntensity: document.getElementById('correction-intensity')?.value,
+                aiTemperature: document.getElementById('ai-temperature')?.value,
+                primaryLanguage: document.getElementById('primary-language')?.value,
+                fallbackLanguage: document.getElementById('fallback-language')?.value,
+                autoTranslate: document.getElementById('auto-translate')?.checked,
+                hearingImpaired: document.getElementById('hearing-impaired')?.checked,
+                aiEnabled: document.getElementById('ai-enabled')?.checked,
+                debugMode: document.getElementById('debug-mode')?.checked,
+                scrapingEnabled: document.getElementById('scraping-enabled')?.checked,
+                cacheEnabled: document.getElementById('cache-enabled')?.checked,
+                maxConcurrentRequests: document.getElementById('max-concurrent-requests')?.value,
+                requestTimeout: document.getElementById('request-timeout')?.value,
+                minSubtitleScore: document.getElementById('min-subtitle-score')?.value
+            };
+            
+            const response = await fetch('/api/settings', {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json',
+                },
+                body: JSON.stringify({ settings })
+            });
+            
+            if (response.ok) {
+                this.showNotification('Settings saved successfully', 'success');
+                this.settings = settings;
+            } else {
+                throw new Error('Failed to save settings');
+            }
+        } catch (error) {
+            console.error('Failed to save settings:', error);
+            this.showNotification('Failed to save settings: ' + error.message, 'error');
+        }
+    }
+
+    getDefaultSettings() {
+        return {
+            aiProvider: 'gemini',
+            aiModel: 'gemini-pro',
+            correctionIntensity: 50,
+            aiTemperature: 0.7,
+            primaryLanguage: 'tr',
+            fallbackLanguage: 'en',
+            autoTranslate: false,
+            hearingImpaired: false,
+            aiEnabled: true,
+            debugMode: false,
+            scrapingEnabled: true,
+            cacheEnabled: true,
+            maxConcurrentRequests: 5,
+            requestTimeout: 30,
+            minSubtitleScore: 0.7
+        };
+    }
+
+    // Tab update functions
+    updateSubtitlesTab() {
+        console.log('Updating subtitles tab...');
+        // This would fetch and display subtitle statistics
+    }
+
+    updateTorrentsTab() {
+        console.log('Updating torrents tab...');
+        // This would fetch and display torrent/stream statistics
+    }
+
+    updateHealthTab() {
+        console.log('Updating health tab...');
+        // Refresh charts and health data
+        this.updateChartsData();
+    }
+
+    updateSettingsTab() {
+        console.log('Updating settings tab...');
+        // Reload settings from server
+        this.loadSettings();
+    }
+
+    // Chart initialization and management
+    async initializeCharts() {
+        try {
+            // Initialize performance charts if Chart.js is available
+            if (typeof Chart !== 'undefined') {
+                this.initializePerformanceCharts();
+            } else {
+                console.warn('Chart.js not available - charts will not be displayed');
+            }
+        } catch (error) {
+            console.error('Failed to initialize charts:', error);
+        }
+    }
+
+    initializePerformanceCharts() {
+        // Response time chart
+        const responseTimeCtx = document.getElementById('response-time-chart');
+        if (responseTimeCtx) {
+            this.chartInstances.responseTime = new Chart(responseTimeCtx, {
+                type: 'line',
+                data: {
+                    labels: Array.from({length: 20}, (_, i) => i),
+                    datasets: [{
+                        label: 'Response Time (ms)',
+                        data: this.performanceData.responseTime.slice(-20),
+                        borderColor: '#007bff',
+                        backgroundColor: 'rgba(0, 123, 255, 0.1)',
+                        tension: 0.1
+                    }]
+                },
+                options: {
+                    responsive: true,
+                    plugins: {
+                        legend: {
+                            display: false
+                        }
+                    },
+                    scales: {
+                        y: {
+                            beginAtZero: true
+                        }
+                    }
+                }
+            });
+        }
+
+        // Memory usage chart
+        const memoryCtx = document.getElementById('memory-chart');
+        if (memoryCtx) {
+            this.chartInstances.memory = new Chart(memoryCtx, {
+                type: 'line',
+                data: {
+                    labels: Array.from({length: 20}, (_, i) => i),
+                    datasets: [{
+                        label: 'Memory Usage (MB)',
+                        data: this.performanceData.memoryUsage.slice(-20),
+                        borderColor: '#28a745',
+                        backgroundColor: 'rgba(40, 167, 69, 0.1)',
+                        tension: 0.1
+                    }]
+                },
+                options: {
+                    responsive: true,
+                    plugins: {
+                        legend: {
+                            display: false
+                        }
+                    },
+                    scales: {
+                        y: {
+                            beginAtZero: true
+                        }
+                    }
+                }
+            });
+        }
+    }
+
+    updateChartsData() {
+        // Update chart data with latest performance metrics
+        if (this.chartInstances.responseTime) {
+            this.chartInstances.responseTime.data.datasets[0].data = this.performanceData.responseTime.slice(-20);
+            this.chartInstances.responseTime.update();
+        }
+
+        if (this.chartInstances.memory) {
+            this.chartInstances.memory.data.datasets[0].data = this.performanceData.memoryUsage.slice(-20);
+            this.chartInstances.memory.update();
+        }
+    }
+
+    // Provider and source population
+    populateProviders() {
+        console.log('Populating providers...');
+        // This would populate the providers status
+    }
+
+    populateSubtitleSources() {
+        console.log('Populating subtitle sources...');
+        // This would populate subtitle source information
+    }
+
+    // Environment status checking
+    async checkEnvironmentStatus() {
+        try {
+            const response = await fetch('/api/environment/status');
+            if (response.ok) {
+                const envStatus = await response.json();
+                this.updateEnvironmentStatus(envStatus);
+            }
+        } catch (error) {
+            console.error('Failed to check environment status:', error);
+        }
+    }
+
+    updateEnvironmentStatus(envStatus) {
+        if (!envStatus) return;
+        
+        // Update provider status indicators
+        Object.entries(envStatus).forEach(([provider, status]) => {
+            if (typeof status === 'object' && status.available !== undefined) {
+                const indicator = document.getElementById(`${provider}-status`);
+                if (indicator) {
+                    indicator.className = status.available ? 'status-online' : 'status-offline';
+                    indicator.textContent = status.available ? 'Online' : 'Offline';
+                }
+            }
+        });
+    }
+
+    // Activity logging
+    addToActivityLog(message, type = 'info') {
+        const timestamp = new Date();
+        this.activityLog.unshift({
+            message,
+            type,
+            timestamp
+        });
+        
+        // Keep only last 50 activities
+        if (this.activityLog.length > 50) {
+            this.activityLog = this.activityLog.slice(0, 50);
+        }
+        
+        this.updateActivityDisplay();
+    }
+
+    // Notification system
+    showNotification(message, type = 'info') {
+        console.log(`[${type.toUpperCase()}] ${message}`);
+        
+        // Try to show visual notification if notification container exists
+        const container = document.getElementById('notification-container') || document.body;
+        
+        const notification = document.createElement('div');
+        notification.className = `notification notification-${type}`;
+        notification.innerHTML = `
+            <div class="notification-content">
+                <i class="fas ${this.getNotificationIcon(type)}"></i>
+                <span>${message}</span>
+                <button class="notification-close" onclick="this.parentElement.parentElement.remove()">
+                    <i class="fas fa-times"></i>
+                </button>
+            </div>
+        `;
+        
+        container.appendChild(notification);
+        
+        // Auto-remove after 5 seconds
+        setTimeout(() => {
+            if (notification.parentNode) {
+                notification.parentNode.removeChild(notification);
+            }
+        }, 5000);
+        
+        // Add to activity log
+        this.addToActivityLog(message, type);
+    }
+
+    getNotificationIcon(type) {
+        switch (type) {
+            case 'success': return 'fa-check-circle';
+            case 'error': return 'fa-exclamation-circle';
+            case 'warning': return 'fa-exclamation-triangle';
+            case 'info':
+            default: return 'fa-info-circle';
+        }
+    }
+
+    // Addon installation functions
+    installAddon() {
+        const manifestUrl = `${window.location.origin}/manifest.json`;
+        const stremioUrl = `stremio://${manifestUrl}`;
+        
+        try {
+            window.open(stremioUrl, '_blank');
+            this.showNotification('Opening Stremio to install addon...', 'info');
+        } catch (error) {
+            this.showNotification('Failed to open Stremio. Please copy the manifest URL manually.', 'error');
+        }
+    }
+
+    copyManifestUrl() {
+        const manifestUrl = `${window.location.origin}/manifest.json`;
+        
+        if (navigator.clipboard) {
+            navigator.clipboard.writeText(manifestUrl).then(() => {
+                this.showNotification('Manifest URL copied to clipboard', 'success');
+            }).catch(() => {
+                this.fallbackCopyText(manifestUrl);
+            });
+        } else {
+            this.fallbackCopyText(manifestUrl);
+        }
+    }
+
+    copyAddonUrl() {
+        const addonUrl = window.location.origin;
+        
+        if (navigator.clipboard) {
+            navigator.clipboard.writeText(addonUrl).then(() => {
+                this.showNotification('Addon URL copied to clipboard', 'success');
+            }).catch(() => {
+                this.fallbackCopyText(addonUrl);
+            });
+        } else {
+            this.fallbackCopyText(addonUrl);
+        }
+    }
+
+    fallbackCopyText(text) {
+        const textArea = document.createElement('textarea');
+        textArea.value = text;
+        textArea.style.position = 'fixed';
+        textArea.style.left = '-999999px';
+        textArea.style.top = '-999999px';
+        document.body.appendChild(textArea);
+        textArea.focus();
+        textArea.select();
+        
+        try {
+            document.execCommand('copy');
+            this.showNotification('URL copied to clipboard', 'success');
+        } catch (err) {
+            this.showNotification('Failed to copy URL. Please copy manually: ' + text, 'error');
+        }
+        
+        document.body.removeChild(textArea);
     }
 }
 
