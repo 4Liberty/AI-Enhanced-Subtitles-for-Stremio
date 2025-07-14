@@ -4,7 +4,7 @@
 const express = require('express');
 const { addonBuilder, serveHTTP } = require('stremio-addon-sdk');
 const path = require('path');
-const { getAICorrectedSubtitle, getSubtitleUrlsForStremio, getCachedSubtitleContent, getProgressiveSubtitleContent, getAiEnhancementStatus } = require('./lib/subtitleMatcher');
+const { getSubtitleUrlsForStremio, getCachedSubtitleContent, getProgressiveSubtitleContent, getAiEnhancementStatus } = require('./lib/subtitleMatcher');
 const { streamEnricher } = require('./lib/streamEnricher');
 const { initializeStreamingProviders, streamingManager } = require('./lib/streamingProviderManager');
 const { setupUIRoutes } = require('./ui-api');
@@ -568,50 +568,12 @@ Please wait while we find subtitles
         return;
     }
 
-    try {
-        const aiSubtitle = await getAICorrectedSubtitle(videoId, language);
-        if (aiSubtitle) {
-            res.setHeader('Content-Type', 'text/plain; charset=utf-8');
-            res.setHeader('Content-Disposition', `attachment; filename="${videoId}_${language}.srt"`);
-            res.send(aiSubtitle);
-        } else {
-            console.error(`[SRT Endpoint] Subtitle generation failed for ${videoId}, providing fallback`);
-            // Provide a fallback subtitle instead of 404
-            const fallbackSubtitle = `1
-00:00:01,000 --> 00:00:05,000
-Turkish subtitle
-
-2
-00:00:06,000 --> 00:00:10,000
-Subtitle for ${videoId}
-
-3
-00:00:11,000 --> 00:00:15,000
-Could not generate AI subtitle
-`;
-            res.setHeader('Content-Type', 'text/plain; charset=utf-8');
-            res.setHeader('Content-Disposition', `attachment; filename="${videoId}_${language}.srt"`);
-            res.send(fallbackSubtitle);
-        }
-    } catch (err) {
-        console.error("[SRT Endpoint] CRITICAL ERROR while getting AI subtitle:", err);
-        // Provide a fallback subtitle instead of 500 error
-        const errorSubtitle = `1
-00:00:01,000 --> 00:00:05,000
-Turkish subtitle
-
-2
-00:00:06,000 --> 00:00:10,000
-Error occurred while generating subtitle
-
-3
-00:00:11,000 --> 00:00:15,000
-VideoId: ${videoId}
-`;
-        res.setHeader('Content-Type', 'text/plain; charset=utf-8');
-        res.setHeader('Content-Disposition', `attachment; filename="${videoId}_${language}.srt"`);
-        res.send(errorSubtitle);
-    }
+    // The logic for fetching and correcting subtitles should be handled by the main subtitle handler,
+    // which calls getSubtitleUrlsForStremio. This endpoint should only serve cached content.
+    // The incorrect call to getAICorrectedSubtitle has been removed.
+    
+    console.error(`[SRT Endpoint] No cached subtitle found for ${videoId} and no fallback requested.`);
+    res.status(404).send('Subtitle not found.');
 });
 
 // Subtitles resource endpoints that Stremio expects
