@@ -3,9 +3,9 @@
     --primary-color: #2196F3;
     --secondary-color: #1976D2;
     --accent-color: #03DAC6;
-    --success-color: #4CAF50;
+    --success-color: #00E676;
     --warning-color: #FF9800;
-    --error-color: #F44336;
+    --error-color: #FF5252;
     --background-color: #121212;
     --surface-color: #1E1E1E;
     --card-color: #2D2D2D;
@@ -16,6 +16,14 @@
     --shadow: 0 4px 6px rgba(0, 0, 0, 0.3);
     --radius: 8px;
     --transition: all 0.3s ease;
+    
+    /* Enhanced status colors */
+    --status-online: #00E676;
+    --status-warning: #FFB74D;
+    --status-error: #FF5252;
+    --status-offline: #616161;
+    --status-loading: #03DAC6;
+    --status-unknown: #9E9E9E;
 }
 
 * {
@@ -99,11 +107,108 @@ body {
     animation: pulse 2s infinite;
 }
 
-.status-healthy { background: var(--success-color); }
-.status-warning { background: var(--warning-color); }
-.status-error { background: var(--error-color); }
-.status-loading { background: var(--accent-color); }
-.status-unknown { background: var(--text-muted); }
+/* Status indicator colors with proper Font Awesome icon styling */
+.status-healthy, 
+.status-healthy i, 
+.fas.fa-circle.status-healthy { 
+    color: var(--status-online) !important;
+    background: var(--status-online) !important;
+}
+
+.status-warning, 
+.status-warning i, 
+.fas.fa-circle.status-warning { 
+    color: var(--status-warning) !important;
+    background: var(--status-warning) !important;
+}
+
+.status-error, 
+.status-error i, 
+.fas.fa-circle.status-error { 
+    color: var(--status-error) !important;
+    background: var(--status-error) !important;
+}
+
+.status-loading, 
+.status-loading i, 
+.fas.fa-circle.status-loading { 
+    color: var(--status-loading) !important;
+    background: var(--status-loading) !important;
+}
+
+.status-unknown, 
+.status-unknown i, 
+.fas.fa-circle.status-unknown { 
+    color: var(--status-unknown) !important;
+    background: var(--status-unknown) !important;
+}
+
+.status-offline, 
+.status-offline i, 
+.fas.fa-circle.status-offline { 
+    color: var(--status-offline) !important;
+    background: var(--status-offline) !important;
+}
+
+/* Custom status indicators for better appearance */
+.status-icon {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    width: 16px;
+    height: 16px;
+}
+
+.status-icon i {
+    font-size: 10px !important;
+    width: 10px !important;
+    height: 10px !important;
+    display: block !important;
+    text-align: center !important;
+    line-height: 1 !important;
+}
+
+/* Alternative: Use custom CSS dots instead of Font Awesome */
+.status-dot-custom {
+    width: 10px;
+    height: 10px;
+    border-radius: 50%;
+    display: inline-block;
+    margin-right: 8px;
+    position: relative;
+    top: 1px;
+}
+
+.status-dot-custom.healthy {
+    background: var(--status-online);
+    box-shadow: 0 0 8px rgba(0, 230, 118, 0.4);
+}
+
+.status-dot-custom.warning {
+    background: var(--status-warning);
+    box-shadow: 0 0 8px rgba(255, 183, 77, 0.4);
+}
+
+.status-dot-custom.error {
+    background: var(--status-error);
+    box-shadow: 0 0 8px rgba(255, 82, 82, 0.4);
+}
+
+.status-dot-custom.loading {
+    background: var(--status-loading);
+    box-shadow: 0 0 8px rgba(3, 218, 198, 0.4);
+    animation: pulse 1.5s infinite;
+}
+
+.status-dot-custom.unknown {
+    background: var(--status-unknown);
+    box-shadow: 0 0 6px rgba(158, 158, 158, 0.3);
+}
+
+.status-dot-custom.offline {
+    background: var(--status-offline);
+    box-shadow: 0 0 6px rgba(97, 97, 97, 0.3);
+}
 
 @keyframes pulse {
     0%, 100% { opacity: 1; }
@@ -709,13 +814,15 @@ body {
 }
 
 .provider-type.api {
-    background: rgba(76, 175, 80, 0.2);
-    color: var(--success-color);
+    background: rgba(0, 230, 118, 0.2);
+    color: var(--status-online);
+    border: 1px solid rgba(0, 230, 118, 0.3);
 }
 
 .provider-type.scraping {
-    background: rgba(255, 152, 0, 0.2);
-    color: var(--warning-color);
+    background: rgba(255, 183, 77, 0.2);
+    color: var(--status-warning);
+    border: 1px solid rgba(255, 183, 77, 0.3);
 }
 
 /* Error Logs */
