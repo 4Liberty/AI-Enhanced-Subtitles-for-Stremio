@@ -18,23 +18,37 @@ class StremioAddonUI {
     init() {
         console.log('Initializing Stremio Addon UI...');
         
-        // Setup event listeners first
-        this.setupEventListeners();
-        
-        // Load settings and initialize components
-        this.loadSettings();
-        this.startHealthMonitoring();
-        this.updateDashboard();
-        this.populateProviders();
-        this.populateSubtitleSources();
-        
-        // Show success notification
-        this.showNotification('System initialized successfully', 'success');
-        
-        // Initialize charts
-        this.initializeCharts();
-        
-        console.log('Stremio Addon UI initialization complete');
+        try {
+            // Setup event listeners first
+            this.setupEventListeners();
+            
+            // Load settings and initialize components
+            this.loadSettings();
+            this.startHealthMonitoring();
+            
+            // Initialize dashboard with error handling
+            this.updateDashboard().catch(error => {
+                console.error('Initial dashboard update failed:', error);
+                this.showNotification('Dashboard initialization failed - some features may be limited', 'warning');
+            });
+            
+            this.populateProviders();
+            this.populateSubtitleSources();
+            
+            // Show success notification
+            this.showNotification('System initialized successfully', 'success');
+            
+            // Initialize charts with error handling
+            this.initializeCharts().catch(error => {
+                console.error('Chart initialization failed:', error);
+            });
+            
+            console.log('Stremio Addon UI initialization complete');
+            
+        } catch (error) {
+            console.error('Critical error during UI initialization:', error);
+            this.showNotification('System initialization failed - please refresh the page', 'error');
+        }
     }
 
     setupEventListeners() {
@@ -168,19 +182,22 @@ class StremioAddonUI {
         try {
             console.log('Updating dashboard...');
             
+            // Show loading state
+            this.showLoadingState();
+            
             // Update quick stats using the new dashboard API
             const dashboardData = await this.fetchDashboardData();
             if (dashboardData) {
                 console.log('Dashboard data received:', dashboardData);
                 
-                // Update quick stats
-                document.getElementById('subtitles-processed').textContent = dashboardData.subtitlesProcessed || 0;
-                document.getElementById('torrents-found').textContent = dashboardData.torrentsFound || 0;
-                document.getElementById('active-providers').textContent = dashboardData.activeProviders || 0;
-                document.getElementById('uptime').textContent = this.formatUptime(dashboardData.uptime || 0);
+                // Update quick stats safely
+                this.updateElementSafely('subtitles-processed', dashboardData.subtitlesProcessed || 0);
+                this.updateElementSafely('torrents-found', dashboardData.torrentsFound || 0);
+                this.updateElementSafely('active-providers', dashboardData.activeProviders || 0);
+                this.updateElementSafely('uptime', this.formatUptime(dashboardData.uptime || 0));
 
                 // Update system status
-                await this.updateSystemStatus();
+                await this.updateSystemStatus(dashboardData.status);
 
                 // Update performance metrics
                 this.updatePerformanceMetrics(dashboardData);
@@ -188,13 +205,57 @@ class StremioAddonUI {
                 // Update system info
                 this.updateSystemInfo(dashboardData);
                 
+                // Hide loading state
+                this.hideLoadingState();
+                
                 console.log('Dashboard updated successfully');
+            } else {
+                // Handle case where no data is returned
+                this.showFallbackData();
+                this.hideLoadingState();
             }
 
         } catch (error) {
             console.error('Error updating dashboard:', error);
-            this.showNotification('Failed to update dashboard - ' + error.message, 'error');
+            this.hideLoadingState();
+            this.showFallbackData();
+            this.showNotification('Dashboard update failed - using cached data', 'warning');
         }
+    }
+
+    updateElementSafely(elementId, value) {
+        const element = document.getElementById(elementId);
+        if (element) {
+            element.textContent = value;
+        } else {
+            console.warn(`Element with ID '${elementId}' not found`);
+        }
+    }
+
+    showLoadingState() {
+        // Add loading indicators to dashboard elements
+        ['subtitles-processed', 'torrents-found', 'active-providers', 'uptime'].forEach(id => {
+            const element = document.getElementById(id);
+            if (element) {
+                element.textContent = '...';
+            }
+        });
+    }
+
+    hideLoadingState() {
+        // Remove loading indicators if needed
+        console.log('Loading state hidden');
+    }
+
+    showFallbackData() {
+        // Show fallback data when API fails
+        this.updateElementSafely('subtitles-processed', '0');
+        this.updateElementSafely('torrents-found', '0');
+        this.updateElementSafely('active-providers', '0');
+        this.updateElementSafely('uptime', '0h 0m');
+        
+        // Update system status as offline
+        this.updateSystemStatus('offline');
     }
 
     async fetchDashboardData() {
@@ -262,38 +323,95 @@ class StremioAddonUI {
         return `${hours}h ${minutes}m`;
     }
 
-    async updateSystemStatus() {
-        const statusItems = [
-            { id: 'subtitle-service-status', endpoint: '/api/health/subtitles' },
-            { id: 'realdebrid-service-status', endpoint: '/api/health/realdebrid' },
-            { id: 'torrent-providers-status', endpoint: '/api/health/providers' },
-            { id: 'api-keys-status', endpoint: '/api/health/keys' }
-        ];
-
-        for (const item of statusItems) {
-            try {
-                const response = await fetch(item.endpoint);
-                const data = await response.json();
-                this.updateStatusItem(item.id, data.status, data.message);
-            } catch (error) {
-                this.updateStatusItem(item.id, 'error', 'Connection failed');
+    async updateSystemStatus(statusOverride = null) {
+        try {
+            if (statusOverride) {
+                // Use the provided status override
+                this.updateOverallSystemStatus(statusOverride);
+                return;
             }
+
+            const statusItems = [
+                { id: 'subtitle-service-status', endpoint: '/api/health/subtitles', label: 'Subtitle Service' },
+                { id: 'realdebrid-service-status', endpoint: '/api/health/realdebrid', label: 'Real-Debrid Service' },
+                { id: 'torrent-providers-status', endpoint: '/api/health/providers', label: 'Torrent Providers' },
+                { id: 'api-keys-status', endpoint: '/api/health/keys', label: 'API Keys' }
+            ];
+
+            for (const item of statusItems) {
+                try {
+                    const response = await fetch(item.endpoint);
+                    if (response.ok) {
+                        const data = await response.json();
+                        this.updateStatusItem(item.id, data.status, data.message);
+                    } else {
+                        this.updateStatusItem(item.id, 'error', 'Service unavailable');
+                    }
+                } catch (error) {
+                    console.warn(`Failed to check ${item.label}:`, error);
+                    this.updateStatusItem(item.id, 'error', 'Connection failed');
+                }
+            }
+        } catch (error) {
+            console.error('Error updating system status:', error);
+            this.updateOverallSystemStatus('error');
         }
+    }
+
+    updateOverallSystemStatus(status) {
+        // Update the overall system status indicator
+        const systemStatusElement = document.querySelector('.system-status');
+        if (systemStatusElement) {
+            systemStatusElement.className = `system-status status-${status}`;
+            systemStatusElement.textContent = this.getStatusText(status);
+        }
+        
+        // Update individual status items with fallback
+        const statusItems = [
+            { id: 'subtitle-service-status', status: status === 'offline' ? 'error' : 'healthy' },
+            { id: 'realdebrid-service-status', status: status === 'offline' ? 'error' : 'healthy' },
+            { id: 'torrent-providers-status', status: status === 'offline' ? 'error' : 'healthy' },
+            { id: 'api-keys-status', status: status === 'offline' ? 'error' : 'healthy' }
+        ];
+        
+        statusItems.forEach(item => {
+            this.updateStatusItem(item.id, item.status, this.getStatusText(item.status));
+        });
+    }
+
+    getStatusText(status) {
+        const statusTexts = {
+            'healthy': 'Operational',
+            'warning': 'Degraded',
+            'error': 'Down',
+            'offline': 'Offline',
+            'starting': 'Starting...',
+            'unknown': 'Unknown'
+        };
+        return statusTexts[status] || 'Unknown';
     }
 
     updateStatusItem(id, status, message) {
         const element = document.getElementById(id);
-        if (!element) return;
+        if (!element) {
+            console.warn(`Status element with ID '${id}' not found`);
+            return;
+        }
 
         const icon = element.querySelector('.status-icon i');
         const value = element.querySelector('.status-value');
 
-        // Remove existing status classes
-        icon.classList.remove('status-healthy', 'status-warning', 'status-error', 'status-unknown');
-        
-        // Add new status class
-        icon.classList.add(`status-${status}`);
-        value.textContent = message;
+        if (icon) {
+            // Remove existing status classes
+            icon.classList.remove('status-healthy', 'status-warning', 'status-error', 'status-unknown', 'status-offline');
+            
+            // Add new status class
+            icon.classList.add(`status-${status}`);
+        }
+
+        if (value) {
+            value.textContent = message || this.getStatusText(status);
+        }
 
         // Update overall status
         this.updateOverallStatus();
@@ -1235,25 +1353,55 @@ class StremioAddonUI {
     }
 }
 
-// Global functions for HTML onclick handlers
-function testSubtitleSearch() {
-    window.stremioUI.testSubtitleSearch();
-}
+// Global error handling
+window.addEventListener('error', function(event) {
+    console.error('Global error caught:', event.error);
+    
+    // Try to show notification if UI is initialized
+    if (window.stremioUI && typeof window.stremioUI.showNotification === 'function') {
+        window.stremioUI.showNotification('System error occurred - some features may not work properly', 'error');
+    }
+});
 
-function testTorrentSearch() {
-    window.stremioUI.testTorrentSearch();
-}
-
-function toggleVisibility(inputId) {
-    window.stremioUI.toggleVisibility(inputId);
-}
+window.addEventListener('unhandledrejection', function(event) {
+    console.error('Unhandled promise rejection:', event.reason);
+    
+    // Try to show notification if UI is initialized
+    if (window.stremioUI && typeof window.stremioUI.showNotification === 'function') {
+        window.stremioUI.showNotification('Network error occurred - retrying...', 'warning');
+    }
+});
 
 // Initialize the UI when DOM is ready
-document.addEventListener('DOMContentLoaded', () => {
-    console.log('DOM Content Loaded - Initializing Stremio Addon UI...');
-    window.stremioUI = new StremioAddonUI();
-    console.log('Stremio Addon UI initialized successfully');
-});
+function initializeUI() {
+    if (window.stremioUI) {
+        console.log('UI already initialized');
+        return;
+    }
+    
+    try {
+        console.log('Initializing Stremio Addon UI...');
+        window.stremioUI = new StremioAddonUI();
+        console.log('Stremio Addon UI initialized successfully');
+    } catch (error) {
+        console.error('Failed to initialize UI:', error);
+        
+        // Show basic error message
+        const errorDiv = document.createElement('div');
+        errorDiv.style.cssText = 'position: fixed; top: 10px; right: 10px; background: #ff4444; color: white; padding: 10px; border-radius: 5px; z-index: 1000;';
+        errorDiv.textContent = 'UI initialization failed - please refresh the page';
+        document.body.appendChild(errorDiv);
+        
+        // Auto-hide after 5 seconds
+        setTimeout(() => {
+            if (errorDiv.parentNode) {
+                errorDiv.parentNode.removeChild(errorDiv);
+            }
+        }, 5000);
+    }
+}
+
+document.addEventListener('DOMContentLoaded', initializeUI);
 
 // Fallback initialization if DOMContentLoaded already fired
 if (document.readyState === 'loading') {
@@ -1261,7 +1409,6 @@ if (document.readyState === 'loading') {
     console.log('DOM is still loading...');
 } else {
     // DOM is already loaded
-    console.log('DOM already loaded - Initializing Stremio Addon UI...');
-    window.stremioUI = new StremioAddonUI();
-    console.log('Stremio Addon UI initialized successfully');
+    console.log('DOM already loaded - Initializing immediately...');
+    initializeUI();
 }

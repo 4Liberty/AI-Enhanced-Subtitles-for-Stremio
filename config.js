@@ -15,7 +15,6 @@ const config = {
     // Set OPENSUBTITLES_API_KEY as an environment variable for production use.
     OPENSUBTITLES_API_KEY: process.env.OPENSUBTITLES_API_KEY,
 
-
     // TMDb API key (for TMDb-to-IMDb conversion)
     // Register at https://www.themoviedb.org/settings/api and set TMDB_API_KEY as an environment variable.
     TMDB_API_KEY: process.env.TMDB_API_KEY,
@@ -28,6 +27,37 @@ const config = {
     // Time in milliseconds for how long to cache subtitle match results.
     // 24 * 60 * 60 * 1000 = 24 hours.
     CACHE_DURATION_MS: 24 * 60 * 60 * 1000,
+
+    // Provider configuration for UI monitoring
+    opensubtitles: {
+        enabled: !!process.env.OPENSUBTITLES_API_KEY,
+        name: "OpenSubtitles",
+        apiKey: process.env.OPENSUBTITLES_API_KEY
+    },
+    
+    subdl: {
+        enabled: !!process.env.SUBDL_API_KEY,
+        name: "SubDL",
+        apiKey: process.env.SUBDL_API_KEY
+    },
+    
+    podnapisi: {
+        enabled: true, // No API key required
+        name: "Podnapisi",
+        apiKey: null
+    },
+    
+    realdebrid: {
+        enabled: !!process.env.REAL_DEBRID_API_KEY,
+        name: "Real-Debrid",
+        apiKey: process.env.REAL_DEBRID_API_KEY
+    },
+    
+    gemini: {
+        enabled: !!process.env.GEMINI_API_KEY,
+        name: "Gemini AI",
+        apiKey: process.env.GEMINI_API_KEY
+    }
 
 
     // Subdl API key (for https://api.subdl.com/api/v1/subtitles)
