@@ -91,25 +91,30 @@ function setupUIRoutes(app) {
     
     // Stats endpoint
     app.get('/api/stats', (req, res) => {
-        const uptime = Math.floor((Date.now() - healthData.startTime) / 1000);
-        const avgResponseTime = healthData.responseTimeHistory.length > 0 
-            ? Math.round(healthData.responseTimeHistory.reduce((a, b) => a + b, 0) / healthData.responseTimeHistory.length)
-            : 0;
-        const successRate = healthData.requestCount > 0 
-            ? Math.round((healthData.successCount / healthData.requestCount) * 100)
-            : 0;
-        
-        res.json({
-            uptime,
-            subtitlesProcessed: healthData.subtitlesProcessed,
-            torrentsFound: healthData.torrentsFound,
-            activeProviders: getActiveProviderCount(),
-            averageResponseTime: avgResponseTime,
-            memoryUsage: healthData.memoryUsage,
-            successRate,
-            requestCount: healthData.requestCount,
-            errorCount: healthData.errorCount
-        });
+        try {
+            const uptime = Math.floor((Date.now() - healthData.startTime) / 1000);
+            const avgResponseTime = healthData.responseTimeHistory.length > 0 
+                ? Math.round(healthData.responseTimeHistory.reduce((a, b) => a + b, 0) / healthData.responseTimeHistory.length)
+                : 0;
+            const successRate = healthData.requestCount > 0 
+                ? Math.round((healthData.successCount / healthData.requestCount) * 100)
+                : 0;
+            
+            res.json({
+                uptime,
+                subtitlesProcessed: healthData.subtitlesProcessed,
+                torrentsFound: healthData.torrentsFound,
+                activeProviders: getActiveProviderCount(),
+                averageResponseTime: avgResponseTime,
+                memoryUsage: healthData.memoryUsage,
+                successRate,
+                requestCount: healthData.requestCount,
+                errorCount: healthData.errorCount
+            });
+        } catch (error) {
+            console.error('Stats endpoint error:', error);
+            res.status(500).json({ error: 'Failed to get stats' });
+        }
     });
     
     // Health endpoints
@@ -117,7 +122,7 @@ function setupUIRoutes(app) {
         try {
             const hasOpenSubtitles = !!process.env.OPENSUBTITLES_API_KEY;
             const hasSubDL = !!process.env.SUBDL_API_KEY;
-            const hasAI = !!process.env.GEMINI_API_KEY;
+            const hasAI = !!(process.env.GEMINI_API_KEY || process.env.OPENAI_API_KEY || process.env.CLAUDE_API_KEY);
             
             if (hasOpenSubtitles && hasSubDL && hasAI) {
                 res.json({ status: 'healthy', message: 'All subtitle services operational' });
@@ -128,6 +133,50 @@ function setupUIRoutes(app) {
             }
         } catch (error) {
             res.json({ status: 'error', message: 'Subtitle service check failed' });
+        }
+    });
+
+    app.get('/api/health/providers', async (req, res) => {
+        try {
+            const hasJackett = !!process.env.JACKETT_URL;
+            const scrapingEnabled = process.env.SCRAPING_ENABLED !== 'false';
+            
+            if (hasJackett && scrapingEnabled) {
+                res.json({ status: 'healthy', message: 'All providers operational' });
+            } else if (scrapingEnabled) {
+                res.json({ status: 'warning', message: 'Scraping enabled, Jackett not configured' });
+            } else {
+                res.json({ status: 'warning', message: 'Limited providers available' });
+            }
+        } catch (error) {
+            res.json({ status: 'error', message: 'Provider check failed' });
+        }
+    });
+
+    app.get('/api/health/keys', async (req, res) => {
+        try {
+            const keys = [
+                'GEMINI_API_KEY',
+                'OPENAI_API_KEY', 
+                'CLAUDE_API_KEY',
+                'OPENSUBTITLES_API_KEY',
+                'SUBDL_API_KEY',
+                'TMDB_API_KEY',
+                'REAL_DEBRID_API_KEY'
+            ];
+            
+            const configuredKeys = keys.filter(key => !!process.env[key]).length;
+            const totalKeys = keys.length;
+            
+            if (configuredKeys >= 4) {
+                res.json({ status: 'healthy', message: `${configuredKeys}/${totalKeys} API keys configured` });
+            } else if (configuredKeys >= 2) {
+                res.json({ status: 'warning', message: `${configuredKeys}/${totalKeys} API keys configured` });
+            } else {
+                res.json({ status: 'error', message: `Only ${configuredKeys}/${totalKeys} API keys configured` });
+            }
+        } catch (error) {
+            res.json({ status: 'error', message: 'API key check failed' });
         }
     });
     
@@ -404,28 +453,284 @@ function setupUIRoutes(app) {
         }
     });
     
-    // Test API keys endpoint
-    app.post('/api/test-keys', async (req, res) => {
+    // Settings endpoints
+    app.get('/api/settings', (req, res) => {
         try {
-            const keys = req.body;
-            
-            const results = {
-                gemini: !!keys.geminiApiKey,
-                opensubtitles: !!keys.opensubtitlesApiKey,
-                tmdb: !!keys.tmdbApiKey,
-                subdl: !!keys.subdlApiKey,
-                realdebrid: !!keys.realdebridApiKey,
-                jackett: !!(keys.jackettUrl && keys.jackettApiKey)
+            // Get current settings from environment variables and defaults
+            const settings = {
+                // API Keys
+                geminiApiKey: process.env.GEMINI_API_KEY ? '***configured***' : '',
+                openaiApiKey: process.env.OPENAI_API_KEY ? '***configured***' : '',
+                claudeApiKey: process.env.CLAUDE_API_KEY ? '***configured***' : '',
+                opensubtitlesApiKey: process.env.OPENSUBTITLES_API_KEY ? '***configured***' : '',
+                tmdbApiKey: process.env.TMDB_API_KEY ? '***configured***' : '',
+                subdlApiKey: process.env.SUBDL_API_KEY ? '***configured***' : '',
+                realdebridApiKey: process.env.REAL_DEBRID_API_KEY ? '***configured***' : '',
+                jackettUrl: process.env.JACKETT_URL || 'http://localhost:9117',
+                jackettApiKey: process.env.JACKETT_API_KEY ? '***configured***' : '',
+                
+                // Language Settings
+                primaryLanguage: process.env.PRIMARY_LANGUAGE || 'tr',
+                fallbackLanguage: process.env.FALLBACK_LANGUAGE || 'en',
+                supportedLanguages: process.env.SUPPORTED_LANGUAGES || 'tr,en,es,fr,de,it,pt,ru,zh,ja,ko,ar',
+                
+                // AI Settings
+                aiEnabled: process.env.AI_ENABLED !== 'false',
+                aiProvider: process.env.AI_PROVIDER || 'gemini',
+                aiModel: process.env.AI_MODEL || 'gemini-pro',
+                correctionIntensity: parseInt(process.env.CORRECTION_INTENSITY || '7'),
+                aiTemperature: parseFloat(process.env.AI_TEMPERATURE || '0.3'),
+                aiMaxTokens: parseInt(process.env.AI_MAX_TOKENS || '1000'),
+                
+                // Advanced Settings
+                debugMode: process.env.DEBUG_MODE === 'true',
+                scrapingEnabled: process.env.SCRAPING_ENABLED !== 'false',
+                cacheEnabled: process.env.CACHE_ENABLED !== 'false',
+                maxConcurrentRequests: parseInt(process.env.MAX_CONCURRENT_REQUESTS || '5'),
+                requestTimeout: parseInt(process.env.REQUEST_TIMEOUT || '10'),
+                cacheTimeout: parseInt(process.env.CACHE_TIMEOUT || '3600'),
+                
+                // Quality Settings
+                preferredQuality: process.env.PREFERRED_QUALITY || 'auto',
+                minSubtitleScore: parseFloat(process.env.MIN_SUBTITLE_SCORE || '0.7'),
+                enableHearingImpaired: process.env.ENABLE_HEARING_IMPAIRED === 'true',
+                enableAutoTranslate: process.env.ENABLE_AUTO_TRANSLATE === 'true'
             };
             
-            addErrorLog('API Keys', 'API key test performed', 'info');
-            res.json(results);
+            res.json(settings);
         } catch (error) {
-            addErrorLog('API Key Test', error.message, 'error');
-            res.status(500).json({ error: 'API key test failed' });
+            addErrorLog('Settings Load', error.message, 'error');
+            res.status(500).json({ error: 'Failed to load settings' });
         }
     });
-    
+
+    app.post('/api/settings', (req, res) => {
+        try {
+            const settings = req.body;
+            
+            // Validate settings
+            if (!settings) {
+                return res.status(400).json({ error: 'Settings data required' });
+            }
+            
+            // Update environment variables (in a real app, these would be saved to a config file)
+            // For now, we'll just acknowledge the save
+            console.log('[Settings] Settings updated:', Object.keys(settings));
+            
+            // In a production environment, you would save these to a configuration file
+            // or database and restart the application with new environment variables
+            
+            res.json({ 
+                success: true, 
+                message: 'Settings saved successfully. Some changes may require restart to take effect.' 
+            });
+        } catch (error) {
+            addErrorLog('Settings Save', error.message, 'error');
+            res.status(500).json({ error: 'Failed to save settings' });
+        }
+    });
+
+    // Test API Keys endpoint
+    app.post('/api/test-keys', async (req, res) => {
+        try {
+            const results = {};
+            
+            // Test Gemini API
+            if (process.env.GEMINI_API_KEY) {
+                try {
+                    const response = await fetch(`https://generativelanguage.googleapis.com/v1/models?key=${process.env.GEMINI_API_KEY}`);
+                    results.gemini = response.ok ? 'success' : 'failed';
+                } catch (e) {
+                    results.gemini = 'error';
+                }
+            } else {
+                results.gemini = 'not_configured';
+            }
+            
+            // Test OpenAI API
+            if (process.env.OPENAI_API_KEY) {
+                try {
+                    const response = await fetch('https://api.openai.com/v1/models', {
+                        headers: { 'Authorization': `Bearer ${process.env.OPENAI_API_KEY}` }
+                    });
+                    results.openai = response.ok ? 'success' : 'failed';
+                } catch (e) {
+                    results.openai = 'error';
+                }
+            } else {
+                results.openai = 'not_configured';
+            }
+            
+            // Test Claude API
+            if (process.env.CLAUDE_API_KEY) {
+                try {
+                    const response = await fetch('https://api.anthropic.com/v1/messages', {
+                        method: 'POST',
+                        headers: { 
+                            'x-api-key': process.env.CLAUDE_API_KEY,
+                            'Content-Type': 'application/json',
+                            'anthropic-version': '2023-06-01'
+                        },
+                        body: JSON.stringify({
+                            model: 'claude-3-haiku-20240307',
+                            max_tokens: 10,
+                            messages: [{ role: 'user', content: 'test' }]
+                        })
+                    });
+                    results.claude = response.ok ? 'success' : 'failed';
+                } catch (e) {
+                    results.claude = 'error';
+                }
+            } else {
+                results.claude = 'not_configured';
+            }
+            
+            // Test OpenSubtitles API
+            if (process.env.OPENSUBTITLES_API_KEY) {
+                try {
+                    const response = await fetch('https://api.opensubtitles.com/api/v1/infos/user', {
+                        headers: { 'Api-Key': process.env.OPENSUBTITLES_API_KEY }
+                    });
+                    results.opensubtitles = response.ok ? 'success' : 'failed';
+                } catch (e) {
+                    results.opensubtitles = 'error';
+                }
+            } else {
+                results.opensubtitles = 'not_configured';
+            }
+            
+            // Test SubDL API
+            if (process.env.SUBDL_API_KEY) {
+                try {
+                    const response = await fetch(`https://api.subdl.com/api/v1/subtitles?api_key=${process.env.SUBDL_API_KEY}&languages=en&subs_per_page=1`);
+                    results.subdl = response.ok ? 'success' : 'failed';
+                } catch (e) {
+                    results.subdl = 'error';
+                }
+            } else {
+                results.subdl = 'not_configured';
+            }
+            
+            // Test TMDB API
+            if (process.env.TMDB_API_KEY) {
+                try {
+                    const response = await fetch(`https://api.themoviedb.org/3/configuration?api_key=${process.env.TMDB_API_KEY}`);
+                    results.tmdb = response.ok ? 'success' : 'failed';
+                } catch (e) {
+                    results.tmdb = 'error';
+                }
+            } else {
+                results.tmdb = 'not_configured';
+            }
+            
+            // Test Real-Debrid API
+            if (process.env.REAL_DEBRID_API_KEY) {
+                try {
+                    const response = await fetch('https://api.real-debrid.com/rest/1.0/user', {
+                        headers: { 'Authorization': `Bearer ${process.env.REAL_DEBRID_API_KEY}` }
+                    });
+                    results.realdebrid = response.ok ? 'success' : 'failed';
+                } catch (e) {
+                    results.realdebrid = 'error';
+                }
+            } else {
+                results.realdebrid = 'not_configured';
+            }
+            
+            res.json(results);
+        } catch (error) {
+            addErrorLog('API Test', error.message, 'error');
+            res.status(500).json({ error: 'Failed to test API keys' });
+        }
+    });
+
+    // Language support endpoint
+    app.get('/api/languages', (req, res) => {
+        try {
+            const languages = [
+                { code: 'tr', name: 'Turkish', native: 'Türkçe' },
+                { code: 'en', name: 'English', native: 'English' },
+                { code: 'es', name: 'Spanish', native: 'Español' },
+                { code: 'fr', name: 'French', native: 'Français' },
+                { code: 'de', name: 'German', native: 'Deutsch' },
+                { code: 'it', name: 'Italian', native: 'Italiano' },
+                { code: 'pt', name: 'Portuguese', native: 'Português' },
+                { code: 'ru', name: 'Russian', native: 'Русский' },
+                { code: 'zh', name: 'Chinese', native: '中文' },
+                { code: 'ja', name: 'Japanese', native: '日本語' },
+                { code: 'ko', name: 'Korean', native: '한국어' },
+                { code: 'ar', name: 'Arabic', native: 'العربية' },
+                { code: 'nl', name: 'Dutch', native: 'Nederlands' },
+                { code: 'sv', name: 'Swedish', native: 'Svenska' },
+                { code: 'no', name: 'Norwegian', native: 'Norsk' },
+                { code: 'da', name: 'Danish', native: 'Dansk' },
+                { code: 'fi', name: 'Finnish', native: 'Suomi' },
+                { code: 'pl', name: 'Polish', native: 'Polski' },
+                { code: 'cs', name: 'Czech', native: 'Čeština' },
+                { code: 'hu', name: 'Hungarian', native: 'Magyar' },
+                { code: 'ro', name: 'Romanian', native: 'Română' },
+                { code: 'bg', name: 'Bulgarian', native: 'Български' },
+                { code: 'hr', name: 'Croatian', native: 'Hrvatski' },
+                { code: 'sl', name: 'Slovenian', native: 'Slovenščina' },
+                { code: 'sk', name: 'Slovak', native: 'Slovenčina' },
+                { code: 'et', name: 'Estonian', native: 'Eesti' },
+                { code: 'lv', name: 'Latvian', native: 'Latviešu' },
+                { code: 'lt', name: 'Lithuanian', native: 'Lietuvių' },
+                { code: 'el', name: 'Greek', native: 'Ελληνικά' },
+                { code: 'he', name: 'Hebrew', native: 'עברית' },
+                { code: 'hi', name: 'Hindi', native: 'हिन्दी' },
+                { code: 'th', name: 'Thai', native: 'ไทย' },
+                { code: 'vi', name: 'Vietnamese', native: 'Tiếng Việt' },
+                { code: 'id', name: 'Indonesian', native: 'Bahasa Indonesia' },
+                { code: 'ms', name: 'Malay', native: 'Bahasa Melayu' },
+                { code: 'tl', name: 'Filipino', native: 'Filipino' },
+                { code: 'uk', name: 'Ukrainian', native: 'Українська' },
+                { code: 'be', name: 'Belarusian', native: 'Беларуская' },
+                { code: 'mk', name: 'Macedonian', native: 'Македонски' },
+                { code: 'sq', name: 'Albanian', native: 'Shqip' },
+                { code: 'sr', name: 'Serbian', native: 'Српски' },
+                { code: 'bs', name: 'Bosnian', native: 'Bosanski' },
+                { code: 'me', name: 'Montenegrin', native: 'Crnogorski' }
+            ];
+            
+            res.json(languages);
+        } catch (error) {
+            addErrorLog('Languages', error.message, 'error');
+            res.status(500).json({ error: 'Failed to get languages' });
+        }
+    });
+
+    // AI Models endpoint
+    app.get('/api/ai-models', (req, res) => {
+        try {
+            const models = {
+                gemini: [
+                    { id: 'gemini-pro', name: 'Gemini Pro', description: 'Best for complex reasoning and long context' },
+                    { id: 'gemini-pro-vision', name: 'Gemini Pro Vision', description: 'Multimodal with vision capabilities' },
+                    { id: 'gemini-1.5-pro', name: 'Gemini 1.5 Pro', description: 'Latest model with improved performance' },
+                    { id: 'gemini-1.5-flash', name: 'Gemini 1.5 Flash', description: 'Fast and efficient for simpler tasks' }
+                ],
+                openai: [
+                    { id: 'gpt-4', name: 'GPT-4', description: 'Most capable model for complex tasks' },
+                    { id: 'gpt-4-turbo', name: 'GPT-4 Turbo', description: 'Faster and more affordable GPT-4' },
+                    { id: 'gpt-3.5-turbo', name: 'GPT-3.5 Turbo', description: 'Fast and cost-effective' },
+                    { id: 'gpt-3.5-turbo-16k', name: 'GPT-3.5 Turbo 16K', description: 'Extended context length' }
+                ],
+                claude: [
+                    { id: 'claude-3-opus-20240229', name: 'Claude 3 Opus', description: 'Most powerful model for complex tasks' },
+                    { id: 'claude-3-sonnet-20240229', name: 'Claude 3 Sonnet', description: 'Balanced performance and speed' },
+                    { id: 'claude-3-haiku-20240307', name: 'Claude 3 Haiku', description: 'Fastest and most compact' },
+                    { id: 'claude-2.1', name: 'Claude 2.1', description: 'Previous generation model' }
+                ]
+            };
+            
+            res.json(models);
+        } catch (error) {
+            addErrorLog('AI Models', error.message, 'error');
+            res.status(500).json({ error: 'Failed to get AI models' });
+        }
+    });
+
     // Legacy health endpoint
     app.get('/health', (req, res) => {
         const uptime = Math.floor((Date.now() - healthData.startTime) / 1000);

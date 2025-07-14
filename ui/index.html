@@ -404,6 +404,14 @@
                         <h3><i class="fas fa-key"></i> API Configuration</h3>
                         <div class="api-settings">
                             <div class="setting-group">
+                                <label for="ai-provider">AI Provider</label>
+                                <select id="ai-provider" class="form-select">
+                                    <option value="gemini">Google Gemini</option>
+                                    <option value="openai">OpenAI</option>
+                                    <option value="claude">Anthropic Claude</option>
+                                </select>
+                            </div>
+                            <div class="setting-group">
                                 <label for="gemini-api-key">Google Gemini API Key</label>
                                 <div class="input-group">
                                     <input type="password" id="gemini-api-key" class="form-input" placeholder="Enter API key">
@@ -411,6 +419,46 @@
                                         <i class="fas fa-eye"></i>
                                     </button>
                                 </div>
+                            </div>
+                            <div class="setting-group">
+                                <label for="openai-api-key">OpenAI API Key</label>
+                                <div class="input-group">
+                                    <input type="password" id="openai-api-key" class="form-input" placeholder="Enter API key">
+                                    <button class="btn btn-secondary" onclick="toggleVisibility('openai-api-key')">
+                                        <i class="fas fa-eye"></i>
+                                    </button>
+                                </div>
+                            </div>
+                            <div class="setting-group">
+                                <label for="claude-api-key">Anthropic Claude API Key</label>
+                                <div class="input-group">
+                                    <input type="password" id="claude-api-key" class="form-input" placeholder="Enter API key">
+                                    <button class="btn btn-secondary" onclick="toggleVisibility('claude-api-key')">
+                                        <i class="fas fa-eye"></i>
+                                    </button>
+                                </div>
+                            </div>
+                            <div class="setting-group">
+                                <label for="ai-model">AI Model</label>
+                                <select id="ai-model" class="form-select">
+                                    <option value="gemini-pro">Gemini Pro</option>
+                                    <option value="gemini-1.5-pro">Gemini 1.5 Pro</option>
+                                    <option value="gemini-1.5-flash">Gemini 1.5 Flash</option>
+                                    <option value="gpt-4">GPT-4</option>
+                                    <option value="gpt-4-turbo">GPT-4 Turbo</option>
+                                    <option value="gpt-3.5-turbo">GPT-3.5 Turbo</option>
+                                    <option value="claude-3-opus-20240229">Claude 3 Opus</option>
+                                    <option value="claude-3-sonnet-20240229">Claude 3 Sonnet</option>
+                                    <option value="claude-3-haiku-20240307">Claude 3 Haiku</option>
+                                </select>
+                            </div>
+                            <div class="setting-group">
+                                <label for="correction-intensity">AI Correction Intensity</label>
+                                <div class="range-group">
+                                    <input type="range" id="correction-intensity" class="form-range" min="1" max="10" value="7">
+                                    <span class="range-value">7</span>
+                                </div>
+                                <small class="form-text">1 = Light corrections, 10 = Aggressive corrections</small>
                             </div>
                             <div class="setting-group">
                                 <label for="opensubtitles-api-key">OpenSubtitles API Key</label>
@@ -472,10 +520,74 @@
                         </div>
                     </div>
 
+                    <!-- Language Settings -->
+                    <div class="card language-settings-card">
+                        <h3><i class="fas fa-globe"></i> Language Settings</h3>
+                        <div class="language-settings">
+                            <div class="setting-group">
+                                <label for="primary-language">Primary Language</label>
+                                <select id="primary-language" class="form-select">
+                                    <option value="tr">Turkish (Türkçe)</option>
+                                    <option value="en">English</option>
+                                    <option value="es">Spanish (Español)</option>
+                                    <option value="fr">French (Français)</option>
+                                    <option value="de">German (Deutsch)</option>
+                                    <option value="it">Italian (Italiano)</option>
+                                    <option value="pt">Portuguese (Português)</option>
+                                    <option value="ru">Russian (Русский)</option>
+                                    <option value="zh">Chinese (中文)</option>
+                                    <option value="ja">Japanese (日本語)</option>
+                                    <option value="ko">Korean (한국어)</option>
+                                    <option value="ar">Arabic (العربية)</option>
+                                </select>
+                            </div>
+                            <div class="setting-group">
+                                <label for="fallback-language">Fallback Language</label>
+                                <select id="fallback-language" class="form-select">
+                                    <option value="en">English</option>
+                                    <option value="tr">Turkish (Türkçe)</option>
+                                    <option value="es">Spanish (Español)</option>
+                                    <option value="fr">French (Français)</option>
+                                    <option value="de">German (Deutsch)</option>
+                                    <option value="it">Italian (Italiano)</option>
+                                    <option value="pt">Portuguese (Português)</option>
+                                    <option value="ru">Russian (Русский)</option>
+                                    <option value="zh">Chinese (中文)</option>
+                                    <option value="ja">Japanese (日本語)</option>
+                                    <option value="ko">Korean (한국어)</option>
+                                    <option value="ar">Arabic (العربية)</option>
+                                </select>
+                            </div>
+                            <div class="setting-item">
+                                <label class="toggle-label">
+                                    <input type="checkbox" id="auto-translate" class="toggle-input">
+                                    <span class="toggle-slider"></span>
+                                    Enable Auto-Translation
+                                </label>
+                                <small class="form-text">Automatically translate subtitles when target language is not available</small>
+                            </div>
+                            <div class="setting-item">
+                                <label class="toggle-label">
+                                    <input type="checkbox" id="hearing-impaired" class="toggle-input">
+                                    <span class="toggle-slider"></span>
+                                    Include Hearing Impaired Subtitles
+                                </label>
+                                <small class="form-text">Search for subtitles with sound descriptions</small>
+                            </div>
+                        </div>
+                    </div>
+
                     <!-- Advanced Settings -->
                     <div class="card advanced-settings-card">
                         <h3><i class="fas fa-cogs"></i> Advanced Settings</h3>
                         <div class="advanced-settings">
+                            <div class="setting-item">
+                                <label class="toggle-label">
+                                    <input type="checkbox" id="ai-enabled" class="toggle-input" checked>
+                                    <span class="toggle-slider"></span>
+                                    Enable AI Corrections
+                                </label>
+                            </div>
                             <div class="setting-item">
                                 <label class="toggle-label">
                                     <input type="checkbox" id="debug-mode" class="toggle-input">
@@ -490,6 +602,44 @@
                                     Enable Web Scraping
                                 </label>
                             </div>
+                            <div class="setting-item">
+                                <label class="toggle-label">
+                                    <input type="checkbox" id="cache-enabled" class="toggle-input" checked>
+                                    <span class="toggle-slider"></span>
+                                    Enable Caching
+                                </label>
+                            </div>
+                            <div class="setting-item">
+                                <label for="max-concurrent-requests">Max Concurrent Requests</label>
+                                <div class="range-group">
+                                    <input type="range" id="max-concurrent-requests" class="form-range" min="1" max="10" value="5">
+                                    <span class="range-value">5</span>
+                                </div>
+                            </div>
+                            <div class="setting-item">
+                                <label for="request-timeout">Request Timeout (seconds)</label>
+                                <div class="range-group">
+                                    <input type="range" id="request-timeout" class="form-range" min="5" max="30" value="10">
+                                    <span class="range-value">10</span>
+                                </div>
+                            </div>
+                            <div class="setting-item">
+                                <label for="ai-temperature">AI Temperature</label>
+                                <div class="range-group">
+                                    <input type="range" id="ai-temperature" class="form-range" min="0" max="1" step="0.1" value="0.3">
+                                    <span class="range-value">0.3</span>
+                                </div>
+                                <small class="form-text">Lower = More focused, Higher = More creative</small>
+                            </div>
+                            <div class="setting-item">
+                                <label for="min-subtitle-score">Minimum Subtitle Score</label>
+                                <div class="range-group">
+                                    <input type="range" id="min-subtitle-score" class="form-range" min="0.1" max="1" step="0.1" value="0.7">
+                                    <span class="range-value">0.7</span>
+                                </div>
+                                <small class="form-text">Higher = Better quality, Lower = More results</small>
+                            </div>
+                        </div>
                             <div class="setting-item">
                                 <label class="toggle-label">
                                     <input type="checkbox" id="cache-enabled" class="toggle-input" checked>
