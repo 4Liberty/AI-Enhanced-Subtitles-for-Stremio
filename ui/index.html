@@ -120,6 +120,35 @@
                         </div>
                     </div>
 
+                    <!-- Stremio Addon Installation -->
+                    <div class="card addon-installation-card">
+                        <h3><i class="fas fa-download"></i> Install Stremio Addon</h3>
+                        <div class="addon-installation">
+                            <p class="addon-description">Click the link below to install this addon in Stremio:</p>
+                            <div class="addon-links">
+                                <a href="#" id="addon-install-link" class="addon-button" target="_blank">
+                                    <i class="fas fa-plus-circle"></i>
+                                    Install Addon in Stremio
+                                </a>
+                                <button class="addon-button secondary" onclick="copyAddonUrl()">
+                                    <i class="fas fa-copy"></i>
+                                    Copy Addon URL
+                                </button>
+                            </div>
+                            <div class="addon-info">
+                                <div class="addon-detail">
+                                    <strong>Addon ID:</strong> <span id="addon-id">com.stremio.ai.subtitle.corrector.tr.final</span>
+                                </div>
+                                <div class="addon-detail">
+                                    <strong>Version:</strong> <span id="addon-version">2.9.3</span>
+                                </div>
+                                <div class="addon-detail">
+                                    <strong>Manifest URL:</strong> <span id="manifest-url"></span>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+
                     <!-- Performance Metrics -->
                     <div class="card performance-card">
                         <h3><i class="fas fa-chart-area"></i> Performance</h3>
@@ -128,21 +157,28 @@
                             <div class="metric-bar">
                                 <div class="metric-fill" style="width: 0%" id="response-time-bar"></div>
                             </div>
-                            <span class="metric-value" id="response-time-value">-- ms</span>
+                            <span class="metric-value" id="avg-response-time">-- ms</span>
                         </div>
                         <div class="metric-item">
                             <span class="metric-label">Memory Usage</span>
                             <div class="metric-bar">
                                 <div class="metric-fill" style="width: 0%" id="memory-usage-bar"></div>
                             </div>
-                            <span class="metric-value" id="memory-usage-value">-- MB</span>
+                            <span class="metric-value" id="memory-usage">-- MB</span>
+                        </div>
+                        <div class="metric-item">
+                            <span class="metric-label">System Memory</span>
+                            <div class="metric-bar">
+                                <div class="metric-fill" style="width: 0%" id="system-memory-bar"></div>
+                            </div>
+                            <span class="metric-value" id="system-memory">-- MB</span>
                         </div>
                         <div class="metric-item">
                             <span class="metric-label">Success Rate</span>
                             <div class="metric-bar">
                                 <div class="metric-fill" style="width: 0%" id="success-rate-bar"></div>
                             </div>
-                            <span class="metric-value" id="success-rate-value">--%</span>
+                            <span class="metric-value" id="success-rate">--%</span>
                         </div>
                     </div>
                 </div>

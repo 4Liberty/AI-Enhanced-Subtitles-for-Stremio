@@ -66,6 +66,32 @@ function addErrorLog(source, message, level = 'error') {
     console.log(`[${level.toUpperCase()}] ${source}: ${message}`);
 }
 
+// Helper function to get active provider count
+function getActiveProviderCount() {
+    const config = require('./config.js');
+    let count = 0;
+    
+    if (config.opensubtitles?.enabled) count++;
+    if (config.subdl?.enabled) count++;
+    if (config.podnapisi?.enabled) count++;
+    if (config.realdebrid?.enabled) count++;
+    
+    return count;
+}
+
+// Helper function to get system status
+function getSystemStatus() {
+    const uptime = Math.floor((Date.now() - healthData.startTime) / 1000);
+    const errorRate = healthData.requestCount > 0 
+        ? (healthData.errorCount / healthData.requestCount) * 100 
+        : 0;
+    
+    if (errorRate > 10) return 'error';
+    if (errorRate > 5) return 'warning';
+    if (uptime < 60) return 'starting';
+    return 'healthy';
+}
+
 // Setup API routes
 function setupUIRoutes(app) {
     // Apply performance monitoring
@@ -114,6 +140,44 @@ function setupUIRoutes(app) {
         } catch (error) {
             console.error('Stats endpoint error:', error);
             res.status(500).json({ error: 'Failed to get stats' });
+        }
+    });
+    
+    // Dashboard endpoint
+    app.get('/api/dashboard', async (req, res) => {
+        try {
+            const uptime = Math.floor((Date.now() - healthData.startTime) / 1000);
+            const avgResponseTime = healthData.responseTimeHistory.length > 0 
+                ? Math.round(healthData.responseTimeHistory.reduce((a, b) => a + b) / healthData.responseTimeHistory.length)
+                : 0;
+            const successRate = healthData.requestCount > 0 
+                ? Math.round((healthData.successCount / healthData.requestCount) * 100)
+                : 0;
+            
+            const memUsage = process.memoryUsage();
+            const systemMemory = os.totalmem();
+            const freeMemory = os.freemem();
+            const usedMemory = systemMemory - freeMemory;
+            
+            res.json({
+                uptime,
+                subtitlesProcessed: healthData.subtitlesProcessed,
+                torrentsFound: healthData.torrentsFound,
+                activeProviders: getActiveProviderCount(),
+                averageResponseTime: avgResponseTime,
+                memoryUsage: Math.round(memUsage.heapUsed / 1024 / 1024),
+                systemMemory: Math.round(systemMemory / 1024 / 1024),
+                freeMemory: Math.round(freeMemory / 1024 / 1024),
+                usedMemory: Math.round(usedMemory / 1024 / 1024),
+                successRate,
+                requestCount: healthData.requestCount,
+                errorCount: healthData.errorCount,
+                recentErrors: healthData.errors.slice(-10),
+                status: getSystemStatus()
+            });
+        } catch (error) {
+            console.error('Dashboard endpoint error:', error);
+            res.status(500).json({ error: 'Failed to get dashboard data' });
         }
     });
     

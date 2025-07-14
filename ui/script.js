@@ -16,25 +16,48 @@ class StremioAddonUI {
     }
 
     init() {
+        console.log('Initializing Stremio Addon UI...');
+        
+        // Setup event listeners first
         this.setupEventListeners();
+        
+        // Load settings and initialize components
         this.loadSettings();
         this.startHealthMonitoring();
         this.updateDashboard();
         this.populateProviders();
         this.populateSubtitleSources();
+        
+        // Show success notification
         this.showNotification('System initialized successfully', 'success');
+        
+        // Initialize charts
         this.initializeCharts();
+        
+        console.log('Stremio Addon UI initialization complete');
     }
 
     setupEventListeners() {
-        // Tab navigation
-        document.querySelectorAll('.nav-tab').forEach(tab => {
+        console.log('Setting up event listeners...');
+        
+        // Tab navigation with more robust handling
+        const tabs = document.querySelectorAll('.nav-tab');
+        console.log(`Found ${tabs.length} tabs`);
+        
+        tabs.forEach((tab, index) => {
+            console.log(`Setting up tab ${index}: ${tab.dataset.tab}`);
             tab.addEventListener('click', (e) => {
                 e.preventDefault();
+                console.log('Tab clicked:', e.target);
+                
                 // Get the tab name from the clicked element or its parent
                 const tabName = e.target.dataset.tab || e.target.closest('.nav-tab').dataset.tab;
+                console.log('Tab name:', tabName);
+                
                 if (tabName) {
                     this.switchTab(tabName);
+                } else {
+                    console.error('No tab name found for clicked element');
                 }
             });
         });
@@ -57,23 +80,66 @@ class StremioAddonUI {
         });
 
         // Import config file
-        document.getElementById('config-file').addEventListener('change', (e) => {
-            this.handleConfigImport(e);
-        });
+        const configFileInput = document.getElementById('config-file');
+        if (configFileInput) {
+            configFileInput.addEventListener('change', (e) => {
+                this.handleConfigImport(e);
+            });
+        }
+
+        // Addon installation buttons
+        const installBtn = document.getElementById('install-addon-btn');
+        if (installBtn) {
+            installBtn.addEventListener('click', () => {
+                this.installAddon();
+            });
+        }
+
+        const copyManifestBtn = document.getElementById('copy-manifest-btn');
+        if (copyManifestBtn) {
+            copyManifestBtn.addEventListener('click', () => {
+                this.copyManifestUrl();
+            });
+        }
+
+        const copyAddonBtn = document.getElementById('copy-addon-btn');
+        if (copyAddonBtn) {
+            copyAddonBtn.addEventListener('click', () => {
+                this.copyAddonUrl();
+            });
+        }
+        
+        console.log('Event listeners setup complete');
     }
 
     switchTab(tabName) {
+        console.log(`Switching to tab: ${tabName}`);
+        
         // Update active tab
         document.querySelectorAll('.nav-tab').forEach(tab => {
             tab.classList.remove('active');
         });
-        document.querySelector(`[data-tab="${tabName}"]`).classList.add('active');
+        
+        const activeTab = document.querySelector(`[data-tab="${tabName}"]`);
+        if (activeTab) {
+            activeTab.classList.add('active');
+            console.log(`Tab button activated: ${tabName}`);
+        } else {
+            console.error(`Tab button not found for: ${tabName}`);
+        }
 
         // Update content
         document.querySelectorAll('.tab-content').forEach(content => {
             content.classList.remove('active');
         });
-        document.getElementById(tabName).classList.add('active');
+        
+        const tabContent = document.getElementById(tabName);
+        if (tabContent) {
+            tabContent.classList.add('active');
+            console.log(`Tab content activated: ${tabName}`);
+        } else {
+            console.error(`Tab content not found for: ${tabName}`);
+        }
 
         this.currentTab = tabName;
 
@@ -100,24 +166,50 @@ class StremioAddonUI {
 
     async updateDashboard() {
         try {
-            // Update quick stats
-            const stats = await this.fetchStats();
-            if (stats) {
-                document.getElementById('subtitles-processed').textContent = stats.subtitlesProcessed || 0;
-                document.getElementById('torrents-found').textContent = stats.torrentsFound || 0;
-                document.getElementById('active-providers').textContent = stats.activeProviders || 0;
-                document.getElementById('uptime').textContent = this.formatUptime(stats.uptime || 0);
+            console.log('Updating dashboard...');
+            
+            // Update quick stats using the new dashboard API
+            const dashboardData = await this.fetchDashboardData();
+            if (dashboardData) {
+                console.log('Dashboard data received:', dashboardData);
+                
+                // Update quick stats
+                document.getElementById('subtitles-processed').textContent = dashboardData.subtitlesProcessed || 0;
+                document.getElementById('torrents-found').textContent = dashboardData.torrentsFound || 0;
+                document.getElementById('active-providers').textContent = dashboardData.activeProviders || 0;
+                document.getElementById('uptime').textContent = this.formatUptime(dashboardData.uptime || 0);
 
                 // Update system status
                 await this.updateSystemStatus();
 
                 // Update performance metrics
-                this.updatePerformanceMetrics(stats);
+                this.updatePerformanceMetrics(dashboardData);
+                
+                // Update system info
+                this.updateSystemInfo(dashboardData);
+                
+                console.log('Dashboard updated successfully');
             }
 
         } catch (error) {
             console.error('Error updating dashboard:', error);
             this.showNotification('Failed to update dashboard - ' + error.message, 'error');
+        }
+    }
+
+    async fetchDashboardData() {
+        try {
+            console.log('Fetching dashboard data...');
+            const response = await fetch('/api/dashboard');
+            if (!response.ok) {
+                throw new Error(`HTTP error! status: ${response.status}`);
+            }
+            const data = await response.json();
+            console.log('Dashboard data fetched successfully');
+            return data;
+        } catch (error) {
+            console.error('Error fetching dashboard data:', error);
+            return null;
         }
     }
 
@@ -131,6 +223,36 @@ class StremioAddonUI {
         } catch (error) {
             console.error('Error fetching stats:', error);
             return null;
+        }
+    }
+
+    updateSystemInfo(dashboardData) {
+        try {
+            // Update memory usage if elements exist
+            const memoryUsageElement = document.getElementById('memory-usage');
+            if (memoryUsageElement) {
+                memoryUsageElement.textContent = `${dashboardData.memoryUsage || 0} MB`;
+            }
+            
+            const systemMemoryElement = document.getElementById('system-memory');
+            if (systemMemoryElement) {
+                systemMemoryElement.textContent = `${dashboardData.systemMemory || 0} MB`;
+            }
+            
+            // Update success rate
+            const successRateElement = document.getElementById('success-rate');
+            if (successRateElement) {
+                successRateElement.textContent = `${dashboardData.successRate || 0}%`;
+            }
+            
+            // Update average response time
+            const avgResponseTimeElement = document.getElementById('avg-response-time');
+            if (avgResponseTimeElement) {
+                avgResponseTimeElement.textContent = `${dashboardData.averageResponseTime || 0}ms`;
+            }
+            
+        } catch (error) {
+            console.error('Error updating system info:', error);
         }
     }
 
@@ -1038,7 +1160,79 @@ class StremioAddonUI {
         }
     }
 
-    // ...existing code...
+    // Addon installation methods
+    async installAddon() {
+        try {
+            const addonUrl = this.getAddonUrl();
+            
+            // Try to open Stremio directly
+            const stremioUrl = `stremio://${addonUrl}`;
+            window.open(stremioUrl, '_blank');
+            
+            this.showNotification('Addon installation initiated! If Stremio doesn\'t open automatically, please copy the URL manually.', 'success');
+            
+            // Also show the URL for manual copy
+            this.showAddonUrls();
+            
+        } catch (error) {
+            console.error('Error installing addon:', error);
+            this.showNotification('Error installing addon. Please copy the URL manually.', 'error');
+            this.showAddonUrls();
+        }
+    }
+
+    getAddonUrl() {
+        const baseUrl = window.location.origin;
+        return `${baseUrl}/manifest.json`;
+    }
+
+    showAddonUrls() {
+        const addonUrl = this.getAddonUrl();
+        const stremioUrl = `stremio://${addonUrl}`;
+        
+        const urlsHtml = `
+            <div class="addon-urls">
+                <h4>Addon URLs:</h4>
+                <div class="url-item">
+                    <label>Manifest URL:</label>
+                    <input type="text" value="${addonUrl}" readonly onclick="this.select()">
+                    <button onclick="navigator.clipboard.writeText('${addonUrl}')">Copy</button>
+                </div>
+                <div class="url-item">
+                    <label>Stremio URL:</label>
+                    <input type="text" value="${stremioUrl}" readonly onclick="this.select()">
+                    <button onclick="navigator.clipboard.writeText('${stremioUrl}')">Copy</button>
+                </div>
+            </div>
+        `;
+        
+        document.getElementById('addon-urls').innerHTML = urlsHtml;
+    }
+
+    async copyManifestUrl() {
+        try {
+            const addonUrl = this.getAddonUrl();
+            await navigator.clipboard.writeText(addonUrl);
+            this.showNotification('Manifest URL copied to clipboard!', 'success');
+        } catch (error) {
+            console.error('Error copying manifest URL:', error);
+            this.showNotification('Error copying URL. Please copy manually.', 'error');
+            this.showAddonUrls();
+        }
+    }
+
+    async copyAddonUrl() {
+        try {
+            const addonUrl = this.getAddonUrl();
+            const stremioUrl = `stremio://${addonUrl}`;
+            await navigator.clipboard.writeText(stremioUrl);
+            this.showNotification('Stremio addon URL copied to clipboard!', 'success');
+        } catch (error) {
+            console.error('Error copying addon URL:', error);
+            this.showNotification('Error copying URL. Please copy manually.', 'error');
+            this.showAddonUrls();
+        }
+    }
 }
 
 // Global functions for HTML onclick handlers
@@ -1052,4 +1246,22 @@ function testTorrentSearch() {
 
 function toggleVisibility(inputId) {
     window.stremioUI.toggleVisibility(inputId);
+}
+
+// Initialize the UI when DOM is ready
+document.addEventListener('DOMContentLoaded', () => {
+    console.log('DOM Content Loaded - Initializing Stremio Addon UI...');
+    window.stremioUI = new StremioAddonUI();
+    console.log('Stremio Addon UI initialized successfully');
+});
+
+// Fallback initialization if DOMContentLoaded already fired
+if (document.readyState === 'loading') {
+    // DOMContentLoaded has not fired yet
+    console.log('DOM is still loading...');
+} else {
+    // DOM is already loaded
+    console.log('DOM already loaded - Initializing Stremio Addon UI...');
+    window.stremioUI = new StremioAddonUI();
+    console.log('Stremio Addon UI initialized successfully');
 }
