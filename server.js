@@ -1131,6 +1131,41 @@ app.get('/api/config', (req, res) => {
     }
 });
 
+// Initialize streaming providers with MediaFusion-inspired architecture
+const streamingConfig = {
+    realdebrid: {
+        apiKey: process.env.REAL_DEBRID_API_KEY,
+        userIP: process.env.USER_IP || null
+    },
+    alldebrid: {
+        apiKey: process.env.ALL_DEBRID_API_KEY,
+        userIP: process.env.USER_IP || null
+    }
+};
+
+const streamingManager = initializeStreamingProviders(streamingConfig);
+console.log("✅ Streaming providers initialized with MediaFusion architecture");
+
+// User configuration management
+let userConfig = {
+    realdebrid: '',
+    alldebrid: '',
+    opensubtitles: '',
+    preferredProvider: 'auto',
+    fallbackMode: true,
+    performanceMonitoring: true
+};
+
+function getUserConfig() {
+    return userConfig;
+}
+
+function saveUserConfig(config) {
+    userConfig = { ...userConfig, ...config };
+    console.log('[Config] User configuration updated');
+    return userConfig;
+}
+
 app.listen(port, () => {
     console.log(`\n🚀 Stremio AI Subtitle & Enhanced Real-Debrid Addon is running!`);
     console.log(`📍 Main URL: http://0.0.0.0:${port}`);

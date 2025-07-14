@@ -249,160 +249,160 @@ class StremioAddonUI {
         }
     }
 
+    // Helper function to safely update DOM elements
     updateElementSafely(elementId, value) {
         const element = document.getElementById(elementId);
         if (element) {
             element.textContent = value;
         } else {
-            console.warn(`Element with ID '${elementId}' not found`);
+            console.warn(`Element not found: ${elementId}`);
         }
     }
 
+    // Initialize fallback UI when main UI elements are missing
+    initializeFallbackUI() {
+        console.log('Initializing fallback UI...');
+        
+        // Create basic dashboard if missing
+        const dashboardTab = document.getElementById('dashboard');
+        if (!dashboardTab) {
+            const newDashboard = document.createElement('div');
+            newDashboard.id = 'dashboard';
+            newDashboard.className = 'tab-content active';
+            newDashboard.innerHTML = `
+                <div class="stats-grid">
+                    <div class="stat-card">
+                        <h3>System Status</h3>
+                        <p id="system-status">Initializing...</p>
+                    </div>
+                    <div class="stat-card">
+                        <h3>Subtitles Processed</h3>
+                        <p id="subtitles-processed">0</p>
+                    </div>
+                    <div class="stat-card">
+                        <h3>Active Providers</h3>
+                        <p id="active-providers">0</p>
+                    </div>
+                    <div class="stat-card">
+                        <h3>Uptime</h3>
+                        <p id="uptime">0s</p>
+                    </div>
+                </div>
+            `;
+            
+            const mainContent = document.querySelector('.main-content') || document.body;
+            mainContent.appendChild(newDashboard);
+        }
+    }
+
+    // Show loading state
     showLoadingState() {
-        // Add loading indicators to dashboard elements
-        ['subtitles-processed', 'torrents-found', 'active-providers', 'uptime'].forEach(id => {
-            const element = document.getElementById(id);
-            if (element) {
-                element.textContent = '...';
-            }
+        const elements = ['subtitles-processed', 'torrents-found', 'active-providers', 'uptime'];
+        elements.forEach(id => {
+            this.updateElementSafely(id, 'Loading...');
         });
     }
 
+    // Hide loading state
     hideLoadingState() {
-        // Remove loading indicators if needed
-        console.log('Loading state hidden');
+        // Remove any loading indicators
+        document.querySelectorAll('.loading').forEach(el => {
+            el.classList.remove('loading');
+        });
     }
 
+    // Show fallback data when real data is unavailable
     showFallbackData() {
-        // Show fallback data when API fails
-        this.updateElementSafely('subtitles-processed', '0');
-        this.updateElementSafely('torrents-found', '0');
-        this.updateElementSafely('active-providers', '0');
-        this.updateElementSafely('uptime', '0h 0m');
+        console.log('Showing fallback data...');
         
-        // Update system status as warning instead of offline
-        this.updateSystemStatus('warning');
+        this.updateElementSafely('subtitles-processed', 'N/A');
+        this.updateElementSafely('torrents-found', 'N/A');
+        this.updateElementSafely('active-providers', 'N/A');
+        this.updateElementSafely('uptime', 'N/A');
         
-        // Show a specific message that the server API is not responding
-        this.showNotification('Server API not responding - please check if the server is running', 'warning');
+        const statusEl = document.getElementById('system-status');
+        if (statusEl) {
+            statusEl.textContent = 'Offline';
+            statusEl.className = 'status-offline';
+        }
     }
 
+    // Fetch dashboard data with proper error handling
     async fetchDashboardData() {
         try {
-            console.log('Fetching dashboard data...');
             const response = await fetch('/api/dashboard');
             if (!response.ok) {
-                console.warn(`Dashboard API returned ${response.status}`);
-                // Return fallback data instead of null
-                return {
-                    subtitlesProcessed: 0,
-                    torrentsFound: 0,
-                    activeProviders: 0,
-                    uptime: 0,
-                    memoryUsage: 0,
-                    successRate: 0,
-                    status: 'warning',
-                    message: 'API not responding'
-                };
-            }
-            const data = await response.json();
-            console.log('Dashboard data fetched successfully');
-            return data;
-        } catch (error) {
-            console.error('Error fetching dashboard data:', error);
-            // Return fallback data instead of null
-            return {
-                subtitlesProcessed: 0,
-                torrentsFound: 0,
-                activeProviders: 0,
-                uptime: 0,
-                memoryUsage: 0,
-                successRate: 0,
-                status: 'error',
-                message: 'Failed to fetch data'
-            };
-        }
-    }
-
-    async fetchStats() {
-        try {
-            const response = await fetch('/api/stats');
-            if (!response.ok) {
-                throw new Error(`HTTP ${response.status}: ${response.statusText}`);
+                // Try legacy health endpoint as fallback
+                const healthResponse = await fetch('/api/health');
+                if (healthResponse.ok) {
+                    const healthData = await healthResponse.json();
+                    return {
+                        status: healthData.status || 'online',
+                        subtitlesProcessed: 0,
+                        torrentsFound: 0,
+                        activeProviders: Object.values(healthData.services || {}).filter(Boolean).length,
+                        uptime: 0
+                    };
+                }
+                throw new Error(`Dashboard API failed: ${response.status}`);
             }
             return await response.json();
         } catch (error) {
-            console.error('Error fetching stats:', error);
-            return {};
+            console.error('Failed to fetch dashboard data:', error);
+            return null;
         }
     }
 
-    addToActivityLog(message, type = 'info') {
-        const activity = {
-            timestamp: new Date(),
-            message,
-            type
-        };
-
-        this.activityLog.unshift(activity);
-        if (this.activityLog.length > 50) {
-            this.activityLog = this.activityLog.slice(0, 50);
-        }
-
-        this.updateActivityDisplay();
-    }
-
-    updateActivityDisplay() {
-        const container = document.getElementById('activity-list');
-        if (!container) return;
-
-        container.innerHTML = '';
+    // Format uptime in human-readable format
+    formatUptime(seconds) {
+        if (!seconds || seconds === 0) return '0s';
         
-        this.activityLog.slice(0, 10).forEach(activity => {
-            const activityElement = document.createElement('div');
-            activityElement.className = 'activity-item';
-            activityElement.innerHTML = `
-                <div class="activity-time">${activity.timestamp.toLocaleTimeString()}</div>
-                <div class="activity-text">${activity.message}</div>
-            `;
-            container.appendChild(activityElement);
-        });
+        const days = Math.floor(seconds / 86400);
+        const hours = Math.floor((seconds % 86400) / 3600);
+        const minutes = Math.floor((seconds % 3600) / 60);
+        const secs = Math.floor(seconds % 60);
+        
+        if (days > 0) return `${days}d ${hours}h`;
+        if (hours > 0) return `${hours}h ${minutes}m`;
+        if (minutes > 0) return `${minutes}m ${secs}s`;
+        return `${secs}s`;
     }
 
-    logActivity(message, type = 'info') {
-        this.addToActivityLog(message, type);
-    }
-
-    // ...existing code...
-
-    async fetchStats() {
-        try {
-            const response = await fetch('/api/stats');
-            if (!response.ok) {
-                throw new Error(`HTTP ${response.status}: ${response.statusText}`);
-            }
-            return await response.json();
-        } catch (error) {
-            console.error('Error fetching stats:', error);
-            return {};
+    // Update system status with proper styling
+    async updateSystemStatus(status) {
+        const statusEl = document.getElementById('system-status');
+        if (!statusEl) {
+            console.warn('System status element not found');
+            return;
+        }
+        
+        // Remove existing status classes
+        statusEl.classList.remove('status-online', 'status-offline', 'status-warning', 'status-error');
+        
+        switch(status) {
+            case 'ok':
+            case 'online':
+            case 'healthy':
+                statusEl.textContent = 'Online';
+                statusEl.classList.add('status-online');
+                break;
+            case 'warning':
+                statusEl.textContent = 'Warning';
+                statusEl.classList.add('status-warning');
+                break;
+            case 'error':
+            case 'offline':
+                statusEl.textContent = 'Offline';
+                statusEl.classList.add('status-offline');
+                break;
+            default:
+                statusEl.textContent = 'Unknown';
+                statusEl.classList.add('status-warning');
         }
     }
 
-    addToActivityLog(message, type = 'info') {
-        const activity = {
-            timestamp: new Date(),
-            message,
-            type
-        };
-
-        this.activityLog.unshift(activity);
-        if (this.activityLog.length > 50) {
-            this.activityLog = this.activityLog.slice(0, 50);
-        }
-
-        this.updateActivityDisplay();
-    }
-
+    // Update performance metrics safely
+    updatePerformanceMetrics(data) {
     updateActivityDisplay() {
         const container = document.getElementById('activity-list');
         if (!container) return;
