@@ -17,7 +17,7 @@
   "dependencies": {
     "adm-zip": "^0.5.10",
     "express": "^4.19.2",
-    "node-fetch": "^3.3.2",
+    "node-fetch": "^2.7.0",
     "rar-stream": "^3.3.0",
     "stremio-addon-sdk": "^1.6.10",
     "unrar-js": "^0.2.3"

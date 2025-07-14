@@ -109,12 +109,32 @@ const manifest = {
 
 const builder = new addonBuilder(manifest);
 
-// Define the subtitle handler
+// Define the subtitle handler with input validation
 const subtitleHandler = async (args) => {
     console.log(`[Handler] Subtitle request received for: ${args.id}`);
     console.log(`[Handler] Full args:`, JSON.stringify(args, null, 2));
+    
     try {
+        // Input validation
+        if (!args || !args.id) {
+            console.error('[Handler] Invalid request: missing ID');
+            return { subtitles: [] };
+        }
+        
+        // Validate ID format
+        const validIdPattern = /^(tt\d+|tmdb:\d+)$/;
+        if (!validIdPattern.test(args.id)) {
+            console.error('[Handler] Invalid ID format:', args.id);
+            return { subtitles: [] };
+        }
+        
+        // Validate infoHash if provided
         const infoHash = args.extra && args.extra.video_hash ? args.extra.video_hash : null;
+        if (infoHash && !/^[a-fA-F0-9]{40}$/.test(infoHash)) {
+            console.error('[Handler] Invalid infoHash format:', infoHash);
+            return { subtitles: [] };
+        }
+        
         const result = await getSubtitleUrlsForStremio(args.id, infoHash);
         if (result && result.subtitles && result.subtitles.length > 0) {
             console.log(`[Handler] Successfully generated ${result.subtitles.length} subtitle option(s).`);
@@ -287,8 +307,35 @@ app.use((req, res, next) => {
     next();
 });
 
-// Add JSON body parsing
-app.use(express.json());
+// Add JSON body parsing with size limits
+app.use(express.json({ limit: '10mb' }));
+
+// Add rate limiting
+const rateLimit = {};
+const RATE_LIMIT_WINDOW = 60000; // 1 minute
+const RATE_LIMIT_MAX = 100; // 100 requests per minute
+
+app.use((req, res, next) => {
+    const clientIP = req.ip || req.connection.remoteAddress;
+    const now = Date.now();
+    
+    // Clean up old entries
+    if (rateLimit[clientIP]) {
+        rateLimit[clientIP] = rateLimit[clientIP].filter(time => now - time < RATE_LIMIT_WINDOW);
+    } else {
+        rateLimit[clientIP] = [];
+    }
+    
+    // Check rate limit
+    if (rateLimit[clientIP].length >= RATE_LIMIT_MAX) {
+        return res.status(429).json({ error: 'Rate limit exceeded' });
+    }
+    
+    // Add current request
+    rateLimit[clientIP].push(now);
+    
+    next();
+});
 
 // Add server timeout configuration for longer subtitle processing
 app.use((req, res, next) => {
@@ -1021,4 +1068,46 @@ app.listen(port, () => {
     console.log(`   • Beautiful modern UI with comprehensive settings`);
     console.log(`   • Real-time system status & error tracking`);
     console.log(`\n🔗 Open http://localhost:${port}/ui to access the control panel!`);
+});
+
+// Graceful shutdown handling
+process.on('SIGTERM', () => {
+    console.log('\n🛑 SIGTERM received, shutting down gracefully...');
+    
+    // Clean up resources
+    if (performanceMetrics) {
+        performanceMetrics.connections = 0;
+    }
+    
+    // Exit gracefully
+    process.exit(0);
+});
+
+process.on('SIGINT', () => {
+    console.log('\n🛑 SIGINT received, shutting down gracefully...');
+    
+    // Clean up resources
+    if (performanceMetrics) {
+        performanceMetrics.connections = 0;
+    }
+    
+    // Exit gracefully
+    process.exit(0);
+});
+
+// Handle uncaught exceptions
+process.on('uncaughtException', (err) => {
+    console.error('💥 Uncaught Exception:', err);
+    console.error('Stack:', err.stack);
+    
+    // Exit gracefully
+    process.exit(1);
+});
+
+// Handle unhandled promise rejections
+process.on('unhandledRejection', (reason, promise) => {
+    console.error('💥 Unhandled Rejection at:', promise, 'reason:', reason);
+    
+    // Exit gracefully
+    process.exit(1);
 });
