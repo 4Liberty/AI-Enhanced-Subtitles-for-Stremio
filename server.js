@@ -4,7 +4,13 @@
 const express = require('express');
 const { addonBuilder, serveHTTP } = require('stremio-addon-sdk');
 const path = require('path');
-const { getSubtitleUrlsForStremio, getCachedSubtitleContent, getProgressiveSubtitleContent, getAiEnhancementStatus } = require('./lib/subtitleMatcher');
+const {
+    getSubtitleUrlsForStremio,
+    getAICorrectedSubtitleDirect,
+    getCachedSubtitleContent,
+    getProgressiveSubtitleContent,
+    getAiEnhancementStatus
+} = require('./lib/subtitleMatcher');
 const { streamEnricher } = require('./lib/streamEnricher');
 const { initializeStreamingProviders, streamingManager } = require('./lib/streamingProviderManager');
 const { setupUIRoutes } = require('./ui-api');
@@ -219,48 +225,68 @@ const builder = new addonBuilder(manifest);
 // Define the subtitle handler with input validation
 const subtitleHandler = async (args) => {
     console.log(`[Handler] Subtitle request received for: ${args.id}`);
-    console.log(`[Handler] Full args:`, JSON.stringify(args, null, 2));
-    
-    try {
-        // Input validation
-        if (!args || !args.id) {
-            console.error('[Handler] Invalid request: missing ID');
-            return { subtitles: [] };
+    const infoHash = args.extra && args.extra.video_hash ? args.extra.video_hash : null;
+    const type = args.type || 'movie';
+    const season = args.type === 'series' ? args.season : null;
+    const episode = args.type === 'series' ? args.episode : null;
+    const language = 'tr';
+    const imdbId = args.id;
+
+    // 1. Try hash-matched subtitles first
+    if (infoHash) {
+        const hashSubs = await getSubtitleUrlsForStremio(imdbId, type, season, episode, language, infoHash);
+        if (hashSubs && hashSubs.length > 0) {
+            console.log(`[Handler] Found hash-matched subtitle for ${imdbId}`);
+            return { subtitles: [hashSubs[0]] };
         }
-        
-        // Validate ID format
-        const validIdPattern = /^(tt\d+|tmdb:\d+)$/;
-        if (!validIdPattern.test(args.id)) {
-            console.error('[Handler] Invalid ID format:', args.id);
-            return { subtitles: [] };
-        }
-        
-        // Validate infoHash if provided
-        const infoHash = args.extra && args.extra.video_hash ? args.extra.video_hash : null;
-        if (infoHash && !/^[a-fA-F0-9]{40}$/.test(infoHash)) {
-            console.error('[Handler] Invalid infoHash format:', infoHash);
-            return { subtitles: [] };
-        }
-        
-        // Parse the ID to extract information
-        const isMovie = args.type === 'movie';
-        const season = args.type === 'series' ? args.season : null;
-        const episode = args.type === 'series' ? args.episode : null;
-        const type = args.type || 'movie';
-        
-        const result = await getSubtitleUrlsForStremio(args.id, type, season, episode, 'tr');
-        if (result && result.length > 0) {
-            console.log(`[Handler] Successfully generated ${result.length} subtitle option(s).`);
-            console.log(`[Handler] Subtitle options:`, JSON.stringify(result, null, 2));
-            return { subtitles: result };
-        } else {
-            console.log(`[Handler] No subtitles found for ${args.id}`);
-            return { subtitles: [] };
-        }
-    } catch (error) {
-        console.error("[Handler] Error in subtitle handler:", error);
-        return { subtitles: [] };
     }
+
+    // 2. No hash match, try to get AI-enhanced subtitle (wait up to 15 seconds)
+    const AI_WAIT_TIMEOUT = 15000;
+    let aiSubtitle = null;
+    let aiError = null;
+    const aiPromise = (async () => {
+        try {
+            // Get best original subtitle
+            const originals = await getSubtitleUrlsForStremio(imdbId, type, season, episode, language);
+            if (originals && originals.length > 0) {
+                const originalContent = await downloadAndProcessSubtitle(originals[0].url, imdbId, originals[0].name);
+                if (originalContent) {
+                    const enhancedContent = await getAICorrectedSubtitleDirect(originalContent, { primaryLanguage: language });
+                    if (enhancedContent && enhancedContent.length > 10) {
+                        aiSubtitle = [{
+                            id: `ai-enhanced-${imdbId}`,
+                            lang: language,
+                            url: `data:text/plain;charset=utf-8,${encodeURIComponent(enhancedContent)}`,
+                            name: 'Turkish (AI Enhanced)'
+                        }];
+                    }
+                }
+            }
+        } catch (err) {
+            aiError = err;
+        }
+    })();
+    // Wait for AI or timeout
+    await Promise.race([
+        aiPromise,
+        new Promise(resolve => setTimeout(resolve, AI_WAIT_TIMEOUT))
+    ]);
+    if (aiSubtitle) {
+        console.log(`[Handler] Serving AI-enhanced subtitle for ${imdbId}`);
+        return { subtitles: aiSubtitle };
+    }
+    if (aiError) {
+        console.warn(`[Handler] AI enhancement error:`, aiError);
+    }
+    // 3. Fallback to best original
+    const originals = await getSubtitleUrlsForStremio(imdbId, type, season, episode, language);
+    if (originals && originals.length > 0) {
+        console.log(`[Handler] Serving best original subtitle for ${imdbId}`);
+        return { subtitles: [originals[0]] };
+    }
+    console.log(`[Handler] No subtitles found for ${imdbId}`);
+    return { subtitles: [] };
 };
 
 // Define the stream handler for Real-Debrid and hash-based matching
