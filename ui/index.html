@@ -158,34 +158,43 @@
 
                     <!-- Performance Metrics -->
                     <div class="card performance-card">
-                        <h3><i class="fas fa-chart-area"></i> Performance</h3>
-                        <div class="metric-item">
-                            <span class="metric-label">Average Response Time</span>
-                            <div class="metric-bar">
-                                <div class="metric-fill" style="width: 0%" id="response-time-bar"></div>
+                        <h3><i class="fas fa-tachometer-alt"></i> Performance Metrics</h3>
+                        <div class="performance-metrics">
+                            <div class="metric-card">
+                                <div class="metric-value" id="response-time-value">--</div>
+                                <div class="metric-label">Response Time</div>
+                                <div class="metric-trend" id="response-time-trend">
+                                    <i class="fas fa-minus"></i> Stable
+                                </div>
                             </div>
-                            <span class="metric-value" id="avg-response-time">-- ms</span>
-                        </div>
-                        <div class="metric-item">
-                            <span class="metric-label">Memory Usage</span>
-                            <div class="metric-bar">
-                                <div class="metric-fill" style="width: 0%" id="memory-usage-bar"></div>
+                            <div class="metric-card">
+                                <div class="metric-value" id="success-rate-value">--</div>
+                                <div class="metric-label">Success Rate</div>
+                                <div class="metric-trend" id="success-rate-trend">
+                                    <i class="fas fa-minus"></i> Stable
+                                </div>
                             </div>
-                            <span class="metric-value" id="memory-usage">-- MB</span>
-                        </div>
-                        <div class="metric-item">
-                            <span class="metric-label">System Memory</span>
-                            <div class="metric-bar">
-                                <div class="metric-fill" style="width: 0%" id="system-memory-bar"></div>
+                            <div class="metric-card">
+                                <div class="metric-value" id="memory-usage-value">--</div>
+                                <div class="metric-label">Memory Usage</div>
+                                <div class="metric-trend" id="memory-usage-trend">
+                                    <i class="fas fa-minus"></i> Stable
+                                </div>
                             </div>
-                            <span class="metric-value" id="system-memory">-- MB</span>
-                        </div>
-                        <div class="metric-item">
-                            <span class="metric-label">Success Rate</span>
-                            <div class="metric-bar">
-                                <div class="metric-fill" style="width: 0%" id="success-rate-bar"></div>
+                            <div class="metric-card">
+                                <div class="metric-value" id="cpu-usage-value">--</div>
+                                <div class="metric-label">CPU Usage</div>
+                                <div class="metric-trend" id="cpu-usage-trend">
+                                    <i class="fas fa-minus"></i> Stable
+                                </div>
                             </div>
-                            <span class="metric-value" id="success-rate">--%</span>
+                            <div class="metric-card">
+                                <div class="metric-value" id="active-connections-value">--</div>
+                                <div class="metric-label">Active Connections</div>
+                                <div class="metric-trend" id="active-connections-trend">
+                                    <i class="fas fa-minus"></i> Stable
+                                </div>
+                            </div>
                         </div>
                     </div>
                 </div>
@@ -605,6 +614,47 @@
                             <button class="btn btn-secondary" onclick="testApiKeys()">
                                 <i class="fas fa-vial"></i> Test API Keys
                             </button>
+                        </div>
+                    </div>
+
+                    <!-- Environment Settings -->
+                    <div class="card environment-card">
+                        <h3><i class="fas fa-cloud"></i> Environment Settings</h3>
+                        <div class="environment-settings">
+                            <div class="setting-group">
+                                <div class="setting-info">
+                                    <i class="fas fa-info-circle"></i>
+                                    <span>Environment variables are used as fallback when API keys are not provided</span>
+                                </div>
+                            </div>
+                            <div class="setting-group">
+                                <label for="fallback-status">Fallback Status:</label>
+                                <div class="status-indicator" id="fallback-status">
+                                    <span class="status-light status-neutral"></span>
+                                    <span class="status-text">Checking...</span>
+                                </div>
+                            </div>
+                            <div class="setting-group">
+                                <label for="env-realdebrid">Real-Debrid Env:</label>
+                                <div class="env-status" id="env-realdebrid">
+                                    <span class="env-icon">🔐</span>
+                                    <span class="env-text">Checking...</span>
+                                </div>
+                            </div>
+                            <div class="setting-group">
+                                <label for="env-alldebrid">AllDebrid Env:</label>
+                                <div class="env-status" id="env-alldebrid">
+                                    <span class="env-icon">🔐</span>
+                                    <span class="env-text">Checking...</span>
+                                </div>
+                            </div>
+                            <div class="setting-group">
+                                <label for="env-opensubtitles">OpenSubtitles Env:</label>
+                                <div class="env-status" id="env-opensubtitles">
+                                    <span class="env-icon">🔐</span>
+                                    <span class="env-text">Checking...</span>
+                                </div>
+                            </div>
                         </div>
                     </div>
 

@@ -851,6 +851,148 @@ app.get('/api/alldebrid/status', async (req, res) => {
     }
 });
 
+// Performance monitoring
+let performanceMetrics = {
+    startTime: Date.now(),
+    requestCount: 0,
+    successCount: 0,
+    failureCount: 0,
+    responseTimes: [],
+    memoryUsage: [],
+    cpuUsage: [],
+    connections: 0
+};
+
+// Middleware to track performance
+app.use((req, res, next) => {
+    const startTime = Date.now();
+    performanceMetrics.requestCount++;
+    performanceMetrics.connections++;
+    
+    res.on('finish', () => {
+        const responseTime = Date.now() - startTime;
+        performanceMetrics.responseTimes.push(responseTime);
+        
+        // Keep only last 100 response times
+        if (performanceMetrics.responseTimes.length > 100) {
+            performanceMetrics.responseTimes.shift();
+        }
+        
+        if (res.statusCode >= 200 && res.statusCode < 400) {
+            performanceMetrics.successCount++;
+        } else {
+            performanceMetrics.failureCount++;
+        }
+        
+        performanceMetrics.connections--;
+    });
+    
+    next();
+});
+
+// Performance metrics endpoint
+app.get('/api/performance/metrics', (req, res) => {
+    try {
+        const memUsage = process.memoryUsage();
+        const cpuUsage = process.cpuUsage();
+        const uptime = process.uptime();
+        
+        // Calculate averages
+        const avgResponseTime = performanceMetrics.responseTimes.length > 0 
+            ? performanceMetrics.responseTimes.reduce((a, b) => a + b, 0) / performanceMetrics.responseTimes.length 
+            : 0;
+        
+        const successRate = performanceMetrics.requestCount > 0 
+            ? (performanceMetrics.successCount / performanceMetrics.requestCount) * 100 
+            : 0;
+        
+        const metrics = {
+            uptime: uptime,
+            memory: {
+                rss: Math.round(memUsage.rss / 1024 / 1024), // MB
+                heapUsed: Math.round(memUsage.heapUsed / 1024 / 1024), // MB
+                heapTotal: Math.round(memUsage.heapTotal / 1024 / 1024), // MB
+                external: Math.round(memUsage.external / 1024 / 1024) // MB
+            },
+            cpu: {
+                user: cpuUsage.user / 1000, // milliseconds to seconds
+                system: cpuUsage.system / 1000 // milliseconds to seconds
+            },
+            requests: {
+                total: performanceMetrics.requestCount,
+                success: performanceMetrics.successCount,
+                failure: performanceMetrics.failureCount,
+                successRate: Math.round(successRate * 100) / 100
+            },
+            performance: {
+                averageResponseTime: Math.round(avgResponseTime * 100) / 100,
+                activeConnections: performanceMetrics.connections,
+                recentResponseTimes: performanceMetrics.responseTimes.slice(-10)
+            }
+        };
+        
+        res.json(metrics);
+    } catch (error) {
+        res.status(500).json({ error: 'Failed to get performance metrics' });
+    }
+});
+
+// Environment status endpoint
+app.get('/api/environment/status', (req, res) => {
+    try {
+        const envStatus = {
+            realdebrid: {
+                available: !!process.env.REALDEBRID_API_KEY,
+                source: process.env.REALDEBRID_API_KEY ? 'environment' : 'none'
+            },
+            alldebrid: {
+                available: !!process.env.ALLDEBRID_API_KEY,
+                source: process.env.ALLDEBRID_API_KEY ? 'environment' : 'none'
+            },
+            opensubtitles: {
+                available: !!process.env.OPENSUBTITLES_API_KEY,
+                source: process.env.OPENSUBTITLES_API_KEY ? 'environment' : 'none'
+            },
+            fallbackEnabled: !!(process.env.REAL_DEBRID_API_KEY || process.env.ALL_DEBRID_API_KEY || process.env.OPENSUBTITLES_API_KEY)
+        };
+        
+        res.json(envStatus);
+    } catch (error) {
+        res.status(500).json({ error: 'Failed to get environment status' });
+    }
+});
+
+// Enhanced configuration endpoint with environment fallback
+app.get('/api/config', (req, res) => {
+    try {
+        const userConfig = getUserConfig();
+        const envConfig = {
+            realdebrid: process.env.REALDEBRID_API_KEY || '',
+            alldebrid: process.env.ALLDEBRID_API_KEY || '',
+            opensubtitles: process.env.OPENSUBTITLES_API_KEY || ''
+        };
+        
+        // Merge user config with environment fallback
+        const config = {
+            realdebrid: userConfig.realdebrid || envConfig.realdebrid,
+            alldebrid: userConfig.alldebrid || envConfig.alldebrid,
+            opensubtitles: userConfig.opensubtitles || envConfig.opensubtitles,
+            preferredProvider: userConfig.preferredProvider || 'auto',
+            fallbackMode: userConfig.fallbackMode !== undefined ? userConfig.fallbackMode : true,
+            performanceMonitoring: userConfig.performanceMonitoring !== undefined ? userConfig.performanceMonitoring : true,
+            sources: {
+                realdebrid: userConfig.realdebrid ? 'user' : (envConfig.realdebrid ? 'environment' : 'none'),
+                alldebrid: userConfig.alldebrid ? 'user' : (envConfig.alldebrid ? 'environment' : 'none'),
+                opensubtitles: userConfig.opensubtitles ? 'user' : (envConfig.opensubtitles ? 'environment' : 'none')
+            }
+        };
+        
+        res.json(config);
+    } catch (error) {
+        res.status(500).json({ error: 'Failed to get configuration' });
+    }
+});
+
 app.listen(port, () => {
     console.log(`\n🚀 Stremio AI Subtitle & Enhanced Real-Debrid Addon is running!`);
     console.log(`📍 Main URL: http://0.0.0.0:${port}`);
@@ -867,6 +1009,9 @@ app.listen(port, () => {
     console.log(`   • /api/streams/enrich - Stream enrichment service`);
     console.log(`   • /api/health/alldebrid - AllDebrid health check`);
     console.log(`   • /api/alldebrid/status - AllDebrid status`);
+    console.log(`   • /api/performance/metrics - Performance metrics`);
+    console.log(`   • /api/environment/status - Environment status`);
+    console.log(`   • /api/config - Enhanced configuration`);
     console.log(`\n✨ Features available:`);
     console.log(`   • AI-powered subtitle correction with Google Gemini`);
     console.log(`   • Enhanced Real-Debrid with MediaFusion architecture`);

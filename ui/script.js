@@ -6,17 +6,21 @@ class StremioAddonUI {
         this.performanceData = {
             responseTime: [],
             successRate: [],
-            memoryUsage: []
+            memoryUsage: [],
+            cpuUsage: [],
+            activeConnections: []
         };
         this.activityLog = [];
         this.settings = {};
         this.refreshInterval = null;
+        this.performanceInterval = null;
+        this.chartInstances = {};
         
         this.init();
     }
 
     init() {
-        console.log('Initializing Stremio Addon UI...');
+        console.log('Initializing Enhanced Stremio Addon UI...');
         
         try {
             // Setup event listeners first
@@ -25,6 +29,7 @@ class StremioAddonUI {
             // Load settings and initialize components
             this.loadSettings();
             this.startHealthMonitoring();
+            this.startPerformanceMonitoring();
             
             // Initialize dashboard with error handling
             this.updateDashboard().catch(error => {
@@ -32,18 +37,19 @@ class StremioAddonUI {
                 this.showNotification('Dashboard initialization failed - some features may be limited', 'warning');
             });
             
+            this.updateTorrentsTab();
             this.populateProviders();
             this.populateSubtitleSources();
             
             // Show success notification
-            this.showNotification('System initialized successfully', 'success');
+            this.showNotification('Enhanced UI initialized successfully', 'success');
             
             // Initialize charts with error handling
             this.initializeCharts().catch(error => {
                 console.error('Chart initialization failed:', error);
             });
             
-            console.log('Stremio Addon UI initialization complete');
+            console.log('Enhanced Stremio Addon UI initialization complete');
             
         } catch (error) {
             console.error('Critical error during UI initialization:', error);
@@ -743,84 +749,137 @@ class StremioAddonUI {
         }, 10000); // Update every 10 seconds
     }
 
-    async fetchStats() {
-        try {
-            const response = await fetch('/api/stats');
-            return await response.json();
-        } catch (error) {
-            console.error('Error fetching stats:', error);
-            return {};
-        }
-    }
-
-    formatUptime(seconds) {
-        const hours = Math.floor(seconds / 3600);
-        const minutes = Math.floor((seconds % 3600) / 60);
-        return `${hours}h ${minutes}m`;
-    }
-
-    addToActivityLog(message, type = 'info') {
-        const activity = {
-            timestamp: new Date(),
-            message,
-            type
-        };
-
-        this.activityLog.unshift(activity);
-        if (this.activityLog.length > 50) {
-            this.activityLog = this.activityLog.slice(0, 50);
-        }
-
-        this.updateActivityDisplay();
-    }
-
-    updateActivityDisplay() {
-        const container = document.getElementById('activity-list');
-        if (!container) return;
-
-        container.innerHTML = '';
+    // Start comprehensive performance monitoring
+    startPerformanceMonitoring() {
+        // Monitor performance metrics every 30 seconds
+        this.performanceInterval = setInterval(() => {
+            this.collectPerformanceMetrics();
+        }, 30000);
         
-        this.activityLog.slice(0, 10).forEach(activity => {
-            const activityElement = document.createElement('div');
-            activityElement.className = 'activity-item';
-            activityElement.innerHTML = `
-                <div class="activity-time">${activity.timestamp.toLocaleTimeString()}</div>
-                <div class="activity-text">${activity.message}</div>
-            `;
-            container.appendChild(activityElement);
+        // Initial collection
+        this.collectPerformanceMetrics();
+    }
+
+    async collectPerformanceMetrics() {
+        try {
+            const response = await fetch('/api/performance/metrics');
+            const data = await response.json();
+            
+            if (data.success) {
+                // Update performance data
+                this.performanceData.responseTime.push(data.metrics.responseTime || 0);
+                this.performanceData.successRate.push(data.metrics.successRate || 0);
+                this.performanceData.memoryUsage.push(data.metrics.memoryUsage || 0);
+                this.performanceData.cpuUsage.push(data.metrics.cpuUsage || 0);
+                this.performanceData.activeConnections.push(data.metrics.activeConnections || 0);
+                
+                // Keep only last 20 data points
+                Object.keys(this.performanceData).forEach(key => {
+                    if (this.performanceData[key].length > 20) {
+                        this.performanceData[key] = this.performanceData[key].slice(-20);
+                    }
+                });
+                
+                // Update performance display
+                this.updatePerformanceDisplay(data.metrics);
+                
+                // Update charts if visible
+                if (this.currentTab === 'health') {
+                    this.updatePerformanceCharts();
+                }
+            }
+        } catch (error) {
+            console.error('Error collecting performance metrics:', error);
+        }
+    }
+
+    updatePerformanceDisplay(metrics) {
+        // Update metric cards
+        const responseTimeEl = document.getElementById('response-time-value');
+        const successRateEl = document.getElementById('success-rate-value');
+        const memoryUsageEl = document.getElementById('memory-usage-value');
+        const cpuUsageEl = document.getElementById('cpu-usage-value');
+        const activeConnectionsEl = document.getElementById('active-connections-value');
+        
+        if (responseTimeEl) responseTimeEl.textContent = metrics.responseTime ? `${metrics.responseTime}ms` : 'N/A';
+        if (successRateEl) successRateEl.textContent = metrics.successRate ? `${metrics.successRate.toFixed(1)}%` : 'N/A';
+        if (memoryUsageEl) memoryUsageEl.textContent = metrics.memoryUsage ? `${(metrics.memoryUsage / 1024 / 1024).toFixed(1)}MB` : 'N/A';
+        if (cpuUsageEl) cpuUsageEl.textContent = metrics.cpuUsage ? `${metrics.cpuUsage.toFixed(1)}%` : 'N/A';
+        if (activeConnectionsEl) activeConnectionsEl.textContent = metrics.activeConnections || '0';
+        
+        // Update trend indicators
+        this.updateTrendIndicators(metrics);
+    }
+
+    updateTrendIndicators(metrics) {
+        const trends = {
+            'response-time-trend': this.calculateTrend(this.performanceData.responseTime),
+            'success-rate-trend': this.calculateTrend(this.performanceData.successRate),
+            'memory-usage-trend': this.calculateTrend(this.performanceData.memoryUsage),
+            'cpu-usage-trend': this.calculateTrend(this.performanceData.cpuUsage),
+            'active-connections-trend': this.calculateTrend(this.performanceData.activeConnections)
+        };
+        
+        Object.entries(trends).forEach(([id, trend]) => {
+            const element = document.getElementById(id);
+            if (element) {
+                element.className = `metric-trend trend-${trend.direction}`;
+                element.innerHTML = `<i class="fas fa-${trend.icon}"></i> ${trend.text}`;
+            }
         });
+    }
+
+    calculateTrend(data) {
+        if (data.length < 2) return { direction: 'stable', icon: 'minus', text: 'Stable' };
+        
+        const recent = data.slice(-3);
+        const average = recent.reduce((a, b) => a + b, 0) / recent.length;
+        const previous = data.slice(-6, -3);
+        const prevAverage = previous.length > 0 ? previous.reduce((a, b) => a + b, 0) / previous.length : average;
+        
+        const change = ((average - prevAverage) / prevAverage) * 100;
+        
+        if (Math.abs(change) < 5) return { direction: 'stable', icon: 'minus', text: 'Stable' };
+        if (change > 0) return { direction: 'up', icon: 'arrow-up', text: `+${change.toFixed(1)}%` };
+        return { direction: 'down', icon: 'arrow-down', text: `${change.toFixed(1)}%` };
+    }
+
+    async updateSettingsTab() {
+        // Settings tab is mostly static, no need to update
+        console.log('Settings tab loaded');
     }
 
     async saveSettings() {
         try {
+            // Show saving indicator
+            this.showNotification('Saving settings...', 'info');
+            
             const settings = {
-                aiProvider: document.getElementById('ai-provider').value,
-                aiModel: document.getElementById('ai-model').value,
-                correctionIntensity: document.getElementById('correction-intensity').value,
-                aiTemperature: document.getElementById('ai-temperature').value,
-                primaryLanguage: document.getElementById('primary-language').value,
-                fallbackLanguage: document.getElementById('fallback-language').value,
-                autoTranslate: document.getElementById('auto-translate').checked,
-                hearingImpaired: document.getElementById('hearing-impaired').checked,
-                aiEnabled: document.getElementById('ai-enabled').checked,
-                debugMode: document.getElementById('debug-mode').checked,
-                scrapingEnabled: document.getElementById('scraping-enabled').checked,
-                cacheEnabled: document.getElementById('cache-enabled').checked,
-                maxConcurrentRequests: document.getElementById('max-concurrent-requests').value,
-                requestTimeout: document.getElementById('request-timeout').value,
-                minSubtitleScore: document.getElementById('min-subtitle-score').value,
+                enableCache: document.getElementById('enable-cache')?.checked || false,
+                enableAiCorrection: document.getElementById('enable-ai-correction')?.checked || false,
+                enableProgressiveLoading: document.getElementById('enable-progressive-loading')?.checked || false,
+                autoSyncEnabled: document.getElementById('auto-sync-enabled')?.checked || false,
+                requestTimeout: document.getElementById('request-timeout')?.value || 30000,
+                minSubtitleScore: document.getElementById('min-subtitle-score')?.value || 0.7,
                 apiKeys: {
-                    gemini: document.getElementById('gemini-api-key').value,
-                    openai: document.getElementById('openai-api-key').value,
-                    claude: document.getElementById('claude-api-key').value,
-                    opensubtitles: document.getElementById('opensubtitles-api-key').value,
-                    tmdb: document.getElementById('tmdb-api-key').value,
-                    subdl: document.getElementById('subdl-api-key').value,
-                    realdebrid: document.getElementById('realdebrid-api-key').value,
-                    alldebrid: document.getElementById('alldebrid-api-key').value,
-                    jackett: document.getElementById('jackett-api-key').value
+                    gemini: document.getElementById('gemini-api-key')?.value || '',
+                    openai: document.getElementById('openai-api-key')?.value || '',
+                    claude: document.getElementById('claude-api-key')?.value || '',
+                    opensubtitles: document.getElementById('opensubtitles-api-key')?.value || '',
+                    tmdb: document.getElementById('tmdb-api-key')?.value || '',
+                    subdl: document.getElementById('subdl-api-key')?.value || '',
+                    realdebrid: document.getElementById('realdebrid-api-key')?.value || '',
+                    alldebrid: document.getElementById('alldebrid-api-key')?.value || '',
+                    jackett: document.getElementById('jackett-api-key')?.value || ''
                 },
-                jackettUrl: document.getElementById('jackett-url').value
+                jackettUrl: document.getElementById('jackett-url')?.value || '',
+                // Environment variable fallback configuration
+                useEnvironmentFallback: document.getElementById('use-environment-fallback')?.checked ?? true,
+                fallbackPriority: ['environment', 'user'], // Environment first, then user input
+                providerPriority: {
+                    realdebrid: parseInt(document.getElementById('realdebrid-priority')?.value) || 1,
+                    alldebrid: parseInt(document.getElementById('alldebrid-priority')?.value) || 2
+                }
             };
 
             const response = await fetch('/api/settings', {
@@ -831,366 +890,99 @@ class StremioAddonUI {
                 body: JSON.stringify(settings)
             });
 
-            if (response.ok) {
-                this.showNotification('Settings saved successfully', 'success');
-                // Store locally as well
-                localStorage.setItem('stremio-addon-settings', JSON.stringify(settings));
+            const result = await response.json();
+
+            if (result.success) {
+                this.showNotification('Settings saved successfully - Environment variables will be used as fallback', 'success');
+                
+                // Update local settings
+                this.settings = { ...this.settings, ...settings };
+                
+                // Refresh health status after settings change
+                setTimeout(() => {
+                    this.updateDashboard();
+                    this.updateTorrentsTab();
+                }, 1000);
+                
+                // Log activity
+                this.logActivity('Settings updated with environment fallback enabled', 'success');
+                
             } else {
-                throw new Error('Failed to save settings');
+                throw new Error(result.error || 'Failed to save settings');
             }
+
         } catch (error) {
             console.error('Error saving settings:', error);
-            this.showNotification('Failed to save settings: ' + error.message, 'error');
+            this.showNotification(`Failed to save settings: ${error.message}`, 'error');
+            this.logActivity(`Settings save failed: ${error.message}`, 'error');
         }
     }
 
     async loadSettings() {
         try {
-            // Try to load from server first
             const response = await fetch('/api/settings');
-            let settings = null;
+            const data = await response.json();
             
-            if (response.ok) {
-                settings = await response.json();
-            } else {
-                // Fallback to local storage
-                const stored = localStorage.getItem('stremio-addon-settings');
-                if (stored) {
-                    settings = JSON.parse(stored);
-                }
-            }
-
-            if (settings) {
-                this.applySettings(settings);
+            if (data.success && data.settings) {
+                this.settings = data.settings;
+                this.populateSettingsForm(data.settings);
+                this.logActivity('Settings loaded successfully', 'info');
             }
         } catch (error) {
             console.error('Error loading settings:', error);
-            // Try local storage as fallback
-            const stored = localStorage.getItem('stremio-addon-settings');
-            if (stored) {
-                this.applySettings(JSON.parse(stored));
-            }
+            this.logActivity('Settings load failed, using defaults', 'warning');
         }
     }
 
-    applySettings(settings) {
-        // Apply AI settings
-        if (settings.aiProvider) document.getElementById('ai-provider').value = settings.aiProvider;
-        if (settings.aiModel) document.getElementById('ai-model').value = settings.aiModel;
-        if (settings.correctionIntensity) {
-            document.getElementById('correction-intensity').value = settings.correctionIntensity;
-            document.querySelector('#correction-intensity + .range-value').textContent = settings.correctionIntensity;
+    populateSettingsForm(settings) {
+        // Populate form fields with loaded settings
+        if (document.getElementById('enable-cache')) {
+            document.getElementById('enable-cache').checked = settings.enableCache || false;
         }
-        if (settings.aiTemperature) {
-            document.getElementById('ai-temperature').value = settings.aiTemperature;
-            document.querySelector('#ai-temperature + .range-value').textContent = settings.aiTemperature;
+        if (document.getElementById('enable-ai-correction')) {
+            document.getElementById('enable-ai-correction').checked = settings.enableAiCorrection || false;
         }
-
-        // Apply language settings
-        if (settings.primaryLanguage) document.getElementById('primary-language').value = settings.primaryLanguage;
-        if (settings.fallbackLanguage) document.getElementById('fallback-language').value = settings.fallbackLanguage;
-        if (settings.autoTranslate !== undefined) document.getElementById('auto-translate').checked = settings.autoTranslate;
-        if (settings.hearingImpaired !== undefined) document.getElementById('hearing-impaired').checked = settings.hearingImpaired;
-
-        // Apply advanced settings
-        if (settings.aiEnabled !== undefined) document.getElementById('ai-enabled').checked = settings.aiEnabled;
-        if (settings.debugMode !== undefined) document.getElementById('debug-mode').checked = settings.debugMode;
-        if (settings.scrapingEnabled !== undefined) document.getElementById('scraping-enabled').checked = settings.scrapingEnabled;
-        if (settings.cacheEnabled !== undefined) document.getElementById('cache-enabled').checked = settings.cacheEnabled;
-        if (settings.maxConcurrentRequests) document.getElementById('max-concurrent-requests').value = settings.maxConcurrentRequests;
-        if (settings.requestTimeout) document.getElementById('request-timeout').value = settings.requestTimeout;
-        if (settings.minSubtitleScore) {
-            document.getElementById('min-subtitle-score').value = settings.minSubtitleScore;
-            document.querySelector('#min-subtitle-score + .range-value').textContent = settings.minSubtitleScore;
+        if (document.getElementById('enable-progressive-loading')) {
+            document.getElementById('enable-progressive-loading').checked = settings.enableProgressiveLoading || false;
         }
-
-        // Apply API keys (only if they exist)
+        if (document.getElementById('auto-sync-enabled')) {
+            document.getElementById('auto-sync-enabled').checked = settings.autoSyncEnabled || false;
+        }
+        if (document.getElementById('request-timeout')) {
+            document.getElementById('request-timeout').value = settings.requestTimeout || 30000;
+        }
+        if (document.getElementById('min-subtitle-score')) {
+            document.getElementById('min-subtitle-score').value = settings.minSubtitleScore || 0.7;
+        }
+        if (document.getElementById('use-environment-fallback')) {
+            document.getElementById('use-environment-fallback').checked = settings.useEnvironmentFallback ?? true;
+        }
+        
+        // Populate API keys (show masked values if they exist)
         if (settings.apiKeys) {
             Object.entries(settings.apiKeys).forEach(([key, value]) => {
-                if (value) {
-                    const element = document.getElementById(`${key}-api-key`);
-                    if (element) element.value = value;
+                const element = document.getElementById(`${key}-api-key`);
+                if (element && value) {
+                    element.value = '***'; // Show masked value to indicate key is set
+                    element.dataset.hasValue = 'true';
                 }
             });
         }
-
-        // Apply Jackett URL
-        if (settings.jackettUrl) document.getElementById('jackett-url').value = settings.jackettUrl;
-
-        console.log('Settings applied successfully');
-    }
-
-    showNotification(message, type = 'info') {
-        // Create notification element
-        const notification = document.createElement('div');
-        notification.className = `notification notification-${type}`;
-        notification.innerHTML = `
-            <i class="fas fa-${type === 'success' ? 'check' : type === 'error' ? 'times' : 'info'}"></i>
-            <span>${message}</span>
-        `;
-
-        // Add to page
-        document.body.appendChild(notification);
-
-        // Auto-remove after 5 seconds
-        setTimeout(() => {
-            notification.remove();
-        }, 5000);
-    }
-
-    // API Functions
-    async testSubtitleSearch() {
-        const imdbId = document.getElementById('test-imdb').value;
-        const language = document.getElementById('test-language').value;
-        const resultsDiv = document.getElementById('subtitle-test-results');
         
-        if (!imdbId) {
-            this.showNotification('Please enter an IMDb ID', 'error');
-            return;
+        // Populate other settings
+        if (document.getElementById('jackett-url')) {
+            document.getElementById('jackett-url').value = settings.jackettUrl || '';
         }
-
-        resultsDiv.innerHTML = '<div class="test-loading">Testing subtitle search...</div>';
-        resultsDiv.classList.add('show');
-
-        try {
-            const response = await fetch('/api/test/subtitle', {
-                method: 'POST',
-                headers: {
-                    'Content-Type': 'application/json',
-                },
-                body: JSON.stringify({ imdbId, language })
-            });
-
-            const result = await response.json();
-            
-            if (response.ok && result.subtitles && result.subtitles.length > 0) {
-                resultsDiv.innerHTML = `
-                    <div class="test-success">
-                        <h4>✓ Found ${result.subtitles.length} subtitle(s)</h4>
-                        <pre>${JSON.stringify(result.subtitles, null, 2)}</pre>
-                    </div>
-                `;
-                this.showNotification('Subtitle search successful', 'success');
-            } else {
-                resultsDiv.innerHTML = `
-                    <div class="test-error">
-                        <h4>⚠ No subtitles found</h4>
-                        <pre>${JSON.stringify(result, null, 2)}</pre>
-                    </div>
-                `;
-                this.showNotification('No subtitles found', 'warning');
+        
+        // Populate provider priorities
+        if (settings.providerPriority) {
+            if (document.getElementById('realdebrid-priority')) {
+                document.getElementById('realdebrid-priority').value = settings.providerPriority.realdebrid || 1;
             }
-        } catch (error) {
-            resultsDiv.innerHTML = `
-                <div class="test-error">
-                    <h4>✗ Test failed</h4>
-                    <pre>${error.message}</pre>
-                </div>
-            `;
-            this.showNotification('Test failed: ' + error.message, 'error');
-        }
-    }
-
-    async testTorrentSearch() {
-        const imdbId = document.getElementById('torrent-test-imdb').value;
-        const quality = document.getElementById('torrent-test-quality').value;
-        const resultsDiv = document.getElementById('torrent-test-results');
-        
-        if (!imdbId) {
-            this.showNotification('Please enter an IMDb ID', 'error');
-            return;
-        }
-
-        resultsDiv.innerHTML = '<div class="test-loading">Testing torrent search...</div>';
-        resultsDiv.classList.add('show');
-
-        try {
-            const response = await fetch('/api/test/torrent', {
-                method: 'POST',
-                headers: {
-                    'Content-Type': 'application/json',
-                },
-                body: JSON.stringify({ imdbId, quality })
-            });
-
-            const result = await response.json();
-            
-            if (response.ok && result.streams && result.streams.length > 0) {
-                resultsDiv.innerHTML = `
-                    <div class="test-success">
-                        <h4>✓ Found ${result.streams.length} stream(s)</h4>
-                        <pre>${JSON.stringify(result.streams, null, 2)}</div>
-                `;
-                this.showNotification('Torrent search successful', 'success');
-            } else {
-                resultsDiv.innerHTML = `
-                    <div class="test-error">
-                        <h4>⚠ No streams found</h4>
-                        <pre>${JSON.stringify(result, null, 2)}</pre>
-                    </div>
-                `;
-                this.showNotification('No streams found', 'warning');
-            }
-        } catch (error) {
-            resultsDiv.innerHTML = `
-                <div class="test-error">
-                    <h4>✗ Test failed</h4>
-                    <pre>${error.message}</pre>
-                </div>
-            `;
-            this.showNotification('Test failed: ' + error.message, 'error');
-        }
-    }
-
-    toggleVisibility(inputId) {
-        const input = document.getElementById(inputId);
-        const button = input.nextElementSibling;
-        const icon = button.querySelector('i');
-        
-        if (input.type === 'password') {
-            input.type = 'text';
-            icon.classList.remove('fa-eye');
-            icon.classList.add('fa-eye-slash');
-        } else {
-            input.type = 'password';
-            icon.classList.remove('fa-eye-slash');
-            icon.classList.add('fa-eye');
-        }
-    }
-
-    async testApiKeys() {
-        const results = {};
-        const keys = {
-            gemini: document.getElementById('gemini-api-key').value,
-            openai: document.getElementById('openai-api-key').value,
-            claude: document.getElementById('claude-api-key').value,
-            opensubtitles: document.getElementById('opensubtitles-api-key').value,
-            tmdb: document.getElementById('tmdb-api-key').value,
-            subdl: document.getElementById('subdl-api-key').value,
-            realdebrid: document.getElementById('realdebrid-api-key').value,
-            alldebrid: document.getElementById('alldebrid-api-key').value,
-            jackett: document.getElementById('jackett-api-key').value
-        };
-
-        this.showNotification('Testing API keys...', 'info');
-
-        for (const [key, value] of Object.entries(keys)) {
-            if (value && value !== '***') {
-                try {
-                    // Test each API key
-                    const response = await fetch(`/api/test/key/${key}`, {
-                        method: 'POST',
-                        headers: {
-                            'Content-Type': 'application/json',
-                        },
-                        body: JSON.stringify({ apiKey: value })
-                    });
-
-                    const result = await response.json();
-                    results[key] = result.success ? 'Valid' : 'Invalid';
-                } catch (error) {
-                    results[key] = 'Error';
-                }
-            } else {
-                results[key] = 'Not set';
+            if (document.getElementById('alldebrid-priority')) {
+                document.getElementById('alldebrid-priority').value = settings.providerPriority.alldebrid || 2;
             }
         }
-
-        let message = 'API Key Test Results:\n';
-        Object.entries(results).forEach(([key, result]) => {
-            message += `${key}: ${result}\n`;
-        });
-
-        this.showNotification(message, 'info');
-    }
-
-    exportConfig() {
-        const settings = {
-            aiProvider: document.getElementById('ai-provider').value,
-            aiModel: document.getElementById('ai-model').value,
-            correctionIntensity: document.getElementById('correction-intensity').value,
-            // ... other settings
-        };
-
-        const dataStr = JSON.stringify(settings, null, 2);
-        const dataUri = 'data:application/json;charset=utf-8,'+ encodeURIComponent(dataStr);
-        
-        const exportFileDefaultName = 'stremio-addon-config.json';
-        
-        const linkElement = document.createElement('a');
-        linkElement.setAttribute('href', dataUri);
-        linkElement.setAttribute('download', exportFileDefaultName);
-        linkElement.click();
-    }
-
-    importConfig() {
-        document.getElementById('config-file').click();
-    }
-
-    handleConfigImport(event) {
-        const file = event.target.files[0];
-        if (file) {
-            const reader = new FileReader();
-            reader.onload = (e) => {
-                try {
-                    const config = JSON.parse(e.target.result);
-                    this.applySettings(config);
-                    this.showNotification('Configuration imported successfully', 'success');
-                } catch (error) {
-                    this.showNotification('Failed to import configuration: ' + error.message, 'error');
-                }
-            };
-            reader.readAsText(file);
-        }
-    }
-
-    clearErrorLogs() {
-        document.getElementById('error-logs').innerHTML = '<div class="log-item"><span class="log-time">System</span><span class="log-message log-success">Error logs cleared</span></div>';
-        this.showNotification('Error logs cleared', 'success');
-    }
-
-    exportErrorLogs() {
-        const logs = Array.from(document.querySelectorAll('.log-item')).map(item => {
-            const time = item.querySelector('.log-time').textContent;
-            const message = item.querySelector('.log-message').textContent;
-            return { time, message };
-        });
-
-        const dataStr = JSON.stringify(logs, null, 2);
-        const dataUri = 'data:application/json;charset=utf-8,'+ encodeURIComponent(dataStr);
-        
-        const linkElement = document.createElement('a');
-        linkElement.setAttribute('href', dataUri);
-        linkElement.setAttribute('download', 'error-logs.json');
-        linkElement.click();
-    }
-
-    clearCache() {
-        fetch('/api/cache/clear', { method: 'POST' })
-            .then(response => response.json())
-            .then(data => {
-                this.showNotification('Cache cleared successfully', 'success');
-                this.updateTorrentsTab();
-            })
-            .catch(error => {
-                this.showNotification('Failed to clear cache: ' + error.message, 'error');
-            });
-    }
-
-    startHealthMonitoring() {
-        // Update health data every 30 seconds
-        this.refreshInterval = setInterval(() => {
-            if (this.currentTab === 'dashboard') {
-                this.updateDashboard();
-            } else if (this.currentTab === 'health') {
-                this.updateHealthTab();
-            }
-        }, 30000);
-    }
-
-    updateSettingsTab() {
-        // Settings tab is mostly static, no need to update
-        console.log('Settings tab loaded');
     }
 
     // Simple chart implementation
@@ -1412,6 +1204,228 @@ class StremioAddonUI {
             this.showAddonUrls();
         }
     }
+
+    // Environment status monitoring
+    async checkEnvironmentStatus() {
+        try {
+            const response = await fetch('/api/environment/status');
+            const envStatus = await response.json();
+            
+            // Update environment status indicators
+            this.updateEnvironmentIndicator('env-realdebrid', envStatus.realdebrid);
+            this.updateEnvironmentIndicator('env-alldebrid', envStatus.alldebrid);
+            this.updateEnvironmentIndicator('env-opensubtitles', envStatus.opensubtitles);
+            
+            // Update fallback status
+            const fallbackStatus = document.getElementById('fallback-status');
+            if (fallbackStatus) {
+                const statusLight = fallbackStatus.querySelector('.status-light');
+                const statusText = fallbackStatus.querySelector('.status-text');
+                
+                if (envStatus.fallbackEnabled) {
+                    statusLight.className = 'status-light status-active';
+                    statusText.textContent = 'Active';
+                } else {
+                    statusLight.className = 'status-light status-inactive';
+                    statusText.textContent = 'Inactive';
+                }
+            }
+            
+            return envStatus;
+        } catch (error) {
+            console.error('Error checking environment status:', error);
+            return null;
+        }
+    }
+
+    updateEnvironmentIndicator(elementId, status) {
+        const element = document.getElementById(elementId);
+        if (element) {
+            const textElement = element.querySelector('.env-text');
+            if (status.available) {
+                textElement.textContent = `Available (${status.source})`;
+                textElement.style.color = '#00ff88';
+            } else {
+                textElement.textContent = 'Not Available';
+                textElement.style.color = '#ff6b6b';
+            }
+        }
+    }
+
+    // Enhanced performance monitoring
+    async updatePerformanceMetrics() {
+        try {
+            const response = await fetch('/api/performance/metrics');
+            const metrics = await response.json();
+            
+            // Update metric values
+            this.updateMetricCard('response-time', metrics.performance.averageResponseTime, 'ms');
+            this.updateMetricCard('success-rate', metrics.requests.successRate, '%');
+            this.updateMetricCard('memory-usage', metrics.memory.heapUsed, 'MB');
+            this.updateMetricCard('cpu-usage', this.calculateCpuPercentage(metrics.cpu), '%');
+            this.updateMetricCard('active-connections', metrics.performance.activeConnections, '');
+            
+            // Store metrics for trend analysis
+            this.storeMetricTrend('response-time', metrics.performance.averageResponseTime);
+            this.storeMetricTrend('success-rate', metrics.requests.successRate);
+            this.storeMetricTrend('memory-usage', metrics.memory.heapUsed);
+            this.storeMetricTrend('cpu-usage', this.calculateCpuPercentage(metrics.cpu));
+            this.storeMetricTrend('active-connections', metrics.performance.activeConnections);
+            
+            return metrics;
+        } catch (error) {
+            console.error('Error updating performance metrics:', error);
+            return null;
+        }
+    }
+
+    updateMetricCard(metricName, value, unit) {
+        const valueElement = document.getElementById(`${metricName}-value`);
+        const trendElement = document.getElementById(`${metricName}-trend`);
+        
+        if (valueElement) {
+            valueElement.textContent = `${value}${unit}`;
+        }
+        
+        if (trendElement) {
+            const trend = this.calculateTrend(metricName, value);
+            const icon = trendElement.querySelector('i');
+            const text = trendElement.querySelector('.metric-text') || trendElement;
+            
+            if (trend > 0) {
+                icon.className = 'fas fa-arrow-up';
+                text.textContent = ` ${trend.toFixed(1)}% up`;
+                trendElement.style.color = metricName === 'success-rate' ? '#00ff88' : '#ff6b6b';
+            } else if (trend < 0) {
+                icon.className = 'fas fa-arrow-down';
+                text.textContent = ` ${Math.abs(trend).toFixed(1)}% down`;
+                trendElement.style.color = metricName === 'success-rate' ? '#ff6b6b' : '#00ff88';
+            } else {
+                icon.className = 'fas fa-minus';
+                text.textContent = ' Stable';
+                trendElement.style.color = '#888';
+            }
+        }
+    }
+
+    calculateCpuPercentage(cpu) {
+        // Simple CPU usage calculation (this is a rough estimate)
+        const totalCpu = cpu.user + cpu.system;
+        return Math.min(Math.round((totalCpu / 1000) * 100), 100);
+    }
+
+    storeMetricTrend(metricName, value) {
+        if (!window.metricTrends) {
+            window.metricTrends = {};
+        }
+        
+        if (!window.metricTrends[metricName]) {
+            window.metricTrends[metricName] = [];
+        }
+        
+        window.metricTrends[metricName].push(value);
+        
+        // Keep only last 10 values for trend calculation
+        if (window.metricTrends[metricName].length > 10) {
+            window.metricTrends[metricName].shift();
+        }
+    }
+
+    calculateTrend(metricName, currentValue) {
+        if (!window.metricTrends || !window.metricTrends[metricName] || window.metricTrends[metricName].length < 2) {
+            return 0;
+        }
+        
+        const values = window.metricTrends[metricName];
+        const previousValue = values[values.length - 2];
+        
+        if (previousValue === 0) return 0;
+        
+        return ((currentValue - previousValue) / previousValue) * 100;
+    }
+
+    // Password visibility toggle
+    togglePasswordVisibility(inputId) {
+        const input = document.getElementById(inputId);
+        const button = input.nextElementSibling;
+        const icon = button.querySelector('i');
+        
+        if (input.type === 'password') {
+            input.type = 'text';
+            icon.className = 'fas fa-eye-slash';
+        } else {
+            input.type = 'password';
+            icon.className = 'fas fa-eye';
+        }
+    }
+
+    // Enhanced connection testing
+    async testAllConnections() {
+        const testButton = document.querySelector('button[onclick="testAllConnections()"]');
+        const originalText = testButton.innerHTML;
+        
+        testButton.innerHTML = '<i class="fas fa-spinner fa-spin"></i> Testing...';
+        testButton.disabled = true;
+        
+        try {
+            // Test Real-Debrid
+            await this.testConnection('real-debrid');
+            
+            // Test AllDebrid
+            await this.testConnection('alldebrid');
+            
+            // Test OpenSubtitles
+            await this.testConnection('opensubtitles');
+            
+            // Show success message
+            this.showNotification('All connections tested successfully!', 'success');
+            
+        } catch (error) {
+            this.showNotification('Some connections failed. Check the logs for details.', 'error');
+        } finally {
+            testButton.innerHTML = originalText;
+            testButton.disabled = false;
+        }
+    }
+
+    showNotification(message, type) {
+        // Create notification element
+        const notification = document.createElement('div');
+        notification.className = `notification ${type}`;
+        notification.innerHTML = `
+            <i class="fas ${type === 'success' ? 'fa-check-circle' : 'fa-exclamation-circle'}"></i>
+            <span>${message}</span>
+        `;
+        
+        document.body.appendChild(notification);
+        
+        // Remove after 3 seconds
+        setTimeout(() => {
+            notification.remove();
+        }, 3000);
+    }
+
+    // Enhanced initialization
+    async initializeApp() {
+        console.log('Initializing application...');
+        
+        // Load settings
+        await this.loadSettings();
+        
+        // Check environment status
+        await this.checkEnvironmentStatus();
+        
+        // Start performance monitoring if enabled
+        const settings = await this.getSettings();
+        if (settings && settings.performanceMonitoring) {
+            this.startPerformanceMonitoring();
+        }
+        
+        // Test initial connections
+        await this.testAllConnections();
+        
+        console.log('Application initialized successfully');
+    }
 }
 
 // Global error handling
@@ -1434,7 +1448,7 @@ window.addEventListener('unhandledrejection', function(event) {
 });
 
 // Initialize the UI when DOM is ready
-function initializeUI() {
+async function initializeUI() {
     if (window.stremioUI) {
         console.log('UI already initialized');
         return;
@@ -1444,6 +1458,13 @@ function initializeUI() {
         console.log('Initializing Stremio Addon UI...');
         window.stremioUI = new StremioAddonUI();
         console.log('Stremio Addon UI initialized successfully');
+        
+        // Initialize additional app features
+        await initializeApp();
+        
+        // Set up automatic updates
+        setupAutomaticUpdates();
+        
     } catch (error) {
         console.error('Failed to initialize UI:', error);
         
@@ -1460,6 +1481,20 @@ function initializeUI() {
             }
         }, 5000);
     }
+}
+
+// Set up automatic updates
+function setupAutomaticUpdates() {
+    // Auto-refresh settings every 30 seconds
+    setInterval(loadSettings, 30000);
+    
+    // Update performance metrics every 5 seconds
+    setInterval(updatePerformanceMetrics, 5000);
+    
+    // Check environment status every 60 seconds
+    setInterval(checkEnvironmentStatus, 60000);
+    
+    console.log('Automatic updates configured');
 }
 
 document.addEventListener('DOMContentLoaded', initializeUI);

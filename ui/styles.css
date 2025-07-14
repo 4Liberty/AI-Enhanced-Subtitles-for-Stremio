@@ -976,33 +976,32 @@ body {
     position: fixed;
     top: 20px;
     right: 20px;
-    background: var(--card-color);
-    color: var(--text-primary);
-    padding: 1rem 1.5rem;
-    border-radius: var(--radius);
-    box-shadow: var(--shadow);
-    border-left: 4px solid var(--primary-color);
-    z-index: 10000;
+    padding: 15px 20px;
+    border-radius: 8px;
+    box-shadow: 0 4px 12px rgba(0, 0, 0, 0.3);
+    z-index: 1000;
     display: flex;
     align-items: center;
-    gap: 0.5rem;
-    animation: slideIn 0.3s ease;
+    gap: 10px;
+    animation: slideInRight 0.3s ease-out;
     max-width: 400px;
 }
 
-.notification-success {
-    border-left-color: var(--success-color);
+.notification.success {
+    background: linear-gradient(135deg, #00ff88, #00cc6a);
+    color: white;
 }
 
-.notification-error {
-    border-left-color: var(--error-color);
+.notification.error {
+    background: linear-gradient(135deg, #ff6b6b, #ff5252);
+    color: white;
 }
 
-.notification-warning {
-    border-left-color: var(--warning-color);
+.notification i {
+    font-size: 18px;
 }
 
-@keyframes slideIn {
+@keyframes slideInRight {
     from {
         transform: translateX(100%);
         opacity: 0;
@@ -1013,295 +1012,166 @@ body {
     }
 }
 
-/* Addon Installation Card */
-.addon-installation-card {
-    grid-column: span 2;
+/* Environment Settings */
+.environment-card {
+    background: linear-gradient(135deg, #2a2a2a, #1e1e1e);
+    border: 1px solid #444;
 }
 
-.addon-installation {
-    text-align: center;
-}
-
-.addon-description {
-    margin-bottom: 1.5rem;
-    color: var(--text-secondary);
-    font-size: 1.1rem;
-}
-
-.addon-links {
+.environment-settings {
     display: flex;
-    gap: 1rem;
-    justify-content: center;
-    margin-bottom: 2rem;
-    flex-wrap: wrap;
+    flex-direction: column;
+    gap: 15px;
 }
 
-.addon-button {
-    display: inline-flex;
-    align-items: center;
-    gap: 0.5rem;
-    padding: 0.75rem 1.5rem;
-    background: linear-gradient(135deg, var(--primary-color), var(--secondary-color));
-    color: white;
-    text-decoration: none;
-    border: none;
-    border-radius: var(--radius);
-    font-weight: 600;
-    font-size: 1rem;
-    cursor: pointer;
-    transition: var(--transition);
-    box-shadow: var(--shadow);
-    min-width: 200px;
-}
-
-.addon-button:hover {
-    transform: translateY(-2px);
-    box-shadow: 0 6px 12px rgba(0, 0, 0, 0.4);
-    filter: brightness(1.1);
-}
-
-.addon-button.secondary {
-    background: var(--surface-color);
-    border: 2px solid var(--border-color);
-}
-
-.addon-button.secondary:hover {
-    border-color: var(--primary-color);
-    background: var(--card-color);
-}
-
-.addon-info {
-    background: var(--surface-color);
-    border-radius: var(--radius);
-    padding: 1.5rem;
-    border: 1px solid var(--border-color);
-}
-
-.addon-detail {
+.env-status {
     display: flex;
-    justify-content: space-between;
     align-items: center;
-    padding: 0.5rem 0;
-    border-bottom: 1px solid var(--border-color);
+    gap: 10px;
+    padding: 8px 12px;
+    background: rgba(255, 255, 255, 0.05);
+    border-radius: 6px;
+    border: 1px solid rgba(255, 255, 255, 0.1);
 }
 
-.addon-detail:last-child {
-    border-bottom: none;
+.env-icon {
+    font-size: 16px;
 }
 
-.addon-detail strong {
-    color: var(--text-primary);
-    min-width: 120px;
-    text-align: left;
+.env-text {
+    font-size: 14px;
+    font-weight: 500;
 }
 
-.addon-detail span {
-    color: var(--text-secondary);
-    font-family: 'Courier New', monospace;
-    font-size: 0.9rem;
-    word-break: break-all;
-}
-
-/* Addon Installation Styles */
-.addon-installation-card {
-    background: linear-gradient(135deg, #2d3748 0%, #4a5568 100%);
-    border-radius: 12px;
-    padding: 20px;
-    border: 1px solid #4a5568;
-    box-shadow: 0 4px 6px rgba(0, 0, 0, 0.1);
-}
-
-.addon-installation-card h3 {
-    color: #e2e8f0;
-    margin-bottom: 15px;
-    font-size: 1.2em;
-}
-
-.addon-info {
-    margin-bottom: 20px;
-    padding: 15px;
-    background: rgba(0, 0, 0, 0.2);
-    border-radius: 8px;
-    border-left: 4px solid #48bb78;
-}
-
-.addon-info p {
-    margin: 5px 0;
-    color: #cbd5e0;
-}
-
-.addon-button {
-    background: linear-gradient(135deg, #48bb78 0%, #38a169 100%);
-    color: white;
-    border: none;
-    padding: 12px 24px;
-    border-radius: 8px;
-    font-weight: 600;
-    cursor: pointer;
-    transition: all 0.3s ease;
-    margin-right: 10px;
-    margin-bottom: 10px;
-    display: inline-flex;
+.setting-info {
+    display: flex;
     align-items: center;
     gap: 8px;
+    padding: 12px;
+    background: rgba(0, 123, 255, 0.1);
+    border-radius: 6px;
+    border-left: 4px solid var(--primary-color);
+    font-size: 14px;
+    color: #ccc;
 }
 
-.addon-button:hover {
-    transform: translateY(-2px);
-    box-shadow: 0 4px 12px rgba(72, 187, 120, 0.3);
+.setting-info i {
+    color: var(--primary-color);
 }
 
-.addon-button.secondary {
-    background: linear-gradient(135deg, #4299e1 0%, #3182ce 100%);
+/* Input Groups */
+.input-group {
+    display: flex;
+    align-items: center;
+    border-radius: 6px;
+    overflow: hidden;
+    border: 1px solid rgba(255, 255, 255, 0.2);
 }
 
-.addon-button.secondary:hover {
-    box-shadow: 0 4px 12px rgba(66, 153, 225, 0.3);
+.input-group input {
+    flex: 1;
+    border: none;
+    padding: 12px;
+    background: rgba(255, 255, 255, 0.1);
+    color: white;
+    border-radius: 0;
 }
 
-.addon-urls {
-    margin-top: 20px;
-    padding: 15px;
-    background: rgba(0, 0, 0, 0.2);
-    border-radius: 8px;
+.input-group input:focus {
+    outline: none;
+    background: rgba(255, 255, 255, 0.15);
 }
 
-.addon-urls h4 {
-    color: #e2e8f0;
-    margin-bottom: 15px;
+.input-group button {
+    border: none;
+    background: rgba(255, 255, 255, 0.1);
+    color: #ccc;
+    padding: 12px;
+    cursor: pointer;
+    transition: background 0.3s ease;
 }
 
-.url-item {
-    margin-bottom: 15px;
+.input-group button:hover {
+    background: rgba(255, 255, 255, 0.2);
+}
+
+.setting-note {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    font-size: 12px;
+    color: #888;
+    margin-top: 4px;
+}
+
+.setting-note i {
+    color: var(--primary-color);
+}
+
+/* Checkbox Groups */
+.checkbox-group {
     display: flex;
     align-items: center;
     gap: 10px;
 }
 
-.url-item label {
-    color: #cbd5e0;
-    min-width: 120px;
-    font-weight: 500;
+.checkbox-group input[type="checkbox"] {
+    width: 18px;
+    height: 18px;
+    accent-color: var(--primary-color);
 }
 
-.url-item input {
-    flex: 1;
-    padding: 8px 12px;
-    background: #2d3748;
-    border: 1px solid #4a5568;
-    color: #e2e8f0;
-    border-radius: 6px;
-    font-family: 'Courier New', monospace;
-    font-size: 0.9em;
-}
-
-.url-item button {
-    background: #4299e1;
-    color: white;
-    border: none;
-    padding: 8px 16px;
-    border-radius: 6px;
+.checkbox-group label {
+    font-size: 14px;
+    color: #ccc;
     cursor: pointer;
-    font-weight: 500;
-    transition: background 0.3s ease;
 }
 
-.url-item button:hover {
-    background: #3182ce;
+/* Performance Metrics */
+.performance-metrics {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+    gap: 15px;
 }
 
-@media (max-width: 768px) {
-    .header-content {
-        flex-direction: column;
-        gap: 1rem;
-        text-align: center;
-    }
+.metric-card {
+    background: rgba(255, 255, 255, 0.05);
+    padding: 20px;
+    border-radius: 8px;
+    border: 1px solid rgba(255, 255, 255, 0.1);
+    text-align: center;
+    transition: all 0.3s ease;
+}
 
-    .main-content {
-        padding: 1rem;
-    }
+.metric-card:hover {
+    background: rgba(255, 255, 255, 0.08);
+    transform: translateY(-2px);
+}
 
-    .dashboard-grid,
-    .subtitles-grid,
-    .torrents-grid,
-    .health-grid,
-    .settings-grid {
-        grid-template-columns: 1fr;
-    }
+.metric-value {
+    font-size: 24px;
+    font-weight: bold;
+    color: var(--primary-color);
+    margin-bottom: 8px;
+}
 
-    .nav-tabs {
-        padding: 0 1rem;
-    }
+.metric-label {
+    font-size: 14px;
+    color: #ccc;
+    margin-bottom: 12px;
+}
 
-    .nav-tab {
-        padding: 0.75rem 1rem;
-        font-size: 0.85rem;
-    }
+.metric-trend {
+    font-size: 12px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: 4px;
+    color: #888;
+}
 
-    .health-score {
-        flex-direction: column;
-        align-items: center;
-        gap: 1rem;
-    }
-
-    .score-circle {
-        width: 100px;
-        height: 100px;
-    }
-
-    .score-circle::before {
-        width: 70px;
-        height: 70px;
-    }
-
-    .score-value {
-        font-size: 1.5rem;
-    }
-
-    .settings-actions,
-    .backup-actions,
-    .error-controls {
-        flex-direction: column;
-    }
-
-    .footer-content {
-        flex-direction: column;
-        gap: 0.5rem;
-        text-align: center;
-    }
-
-    .performance-charts {
-        grid-template-columns: 1fr;
-    }
-    
-    .settings-actions {
-        flex-direction: column;
-    }
-    
-    .notification {
-        right: 10px;
-        left: 10px;
-        max-width: none;
-    }
-
-    .addon-installation-card {
-        grid-column: span 1;
-    }
-    
-    .addon-links {
-        flex-direction: column;
-        align-items: center;
-    }
-    
-    .addon-detail {
-        flex-direction: column;
-        align-items: flex-start;
-        gap: 0.5rem;
-    }
-    
-    .addon-detail strong {
-        min-width: auto;
-    }
+.metric-trend i {
+    font-size: 10px;
 }
 
 /* Scrollbar Styling */
