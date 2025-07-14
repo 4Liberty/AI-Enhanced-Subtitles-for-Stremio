@@ -219,7 +219,13 @@ class StremioAddonUI {
             console.error('Error updating dashboard:', error);
             this.hideLoadingState();
             this.showFallbackData();
-            this.showNotification('Dashboard update failed - using cached data', 'warning');
+            
+            // Show a more helpful error message
+            const errorMessage = error.message.includes('fetch') || error.message.includes('Failed to fetch') 
+                ? 'Cannot connect to server - please check if the server is running on port 7000'
+                : 'Dashboard update failed - using cached data';
+            
+            this.showNotification(errorMessage, 'warning');
         }
     }
 
@@ -254,8 +260,11 @@ class StremioAddonUI {
         this.updateElementSafely('active-providers', '0');
         this.updateElementSafely('uptime', '0h 0m');
         
-        // Update system status as offline
-        this.updateSystemStatus('offline');
+        // Update system status as warning instead of offline
+        this.updateSystemStatus('warning');
+        
+        // Show a specific message that the server API is not responding
+        this.showNotification('Server API not responding - please check if the server is running', 'warning');
     }
 
     async fetchDashboardData() {
@@ -338,6 +347,26 @@ class StremioAddonUI {
                 { id: 'api-keys-status', endpoint: '/api/health/keys', label: 'API Keys' }
             ];
 
+            // Test if the server is running by trying to fetch the first endpoint
+            let serverRunning = false;
+            try {
+                const testResponse = await fetch('/api/health/subtitles');
+                serverRunning = testResponse.status !== 0; // 0 means connection refused
+            } catch (error) {
+                console.warn('Server connection test failed:', error);
+                serverRunning = false;
+            }
+
+            if (!serverRunning) {
+                // Server is not running - show warning status
+                console.warn('Server is not running - showing warning status');
+                statusItems.forEach(item => {
+                    this.updateStatusItem(item.id, 'warning', 'Server not running');
+                });
+                return;
+            }
+
+            // Server is running - check individual services
             for (const item of statusItems) {
                 try {
                     const response = await fetch(item.endpoint);
@@ -368,14 +397,15 @@ class StremioAddonUI {
         
         // Update individual status items with fallback
         const statusItems = [
-            { id: 'subtitle-service-status', status: status === 'offline' ? 'error' : 'healthy' },
-            { id: 'realdebrid-service-status', status: status === 'offline' ? 'error' : 'healthy' },
-            { id: 'torrent-providers-status', status: status === 'offline' ? 'error' : 'healthy' },
-            { id: 'api-keys-status', status: status === 'offline' ? 'error' : 'healthy' }
+            { id: 'subtitle-service-status', status: status === 'offline' ? 'error' : status === 'warning' ? 'warning' : 'healthy' },
+            { id: 'realdebrid-service-status', status: status === 'offline' ? 'error' : status === 'warning' ? 'warning' : 'healthy' },
+            { id: 'torrent-providers-status', status: status === 'offline' ? 'error' : status === 'warning' ? 'warning' : 'healthy' },
+            { id: 'api-keys-status', status: status === 'offline' ? 'error' : status === 'warning' ? 'warning' : 'healthy' }
         ];
         
         statusItems.forEach(item => {
-            this.updateStatusItem(item.id, item.status, this.getStatusText(item.status));
+            const message = status === 'warning' ? 'Server not running' : this.getStatusText(item.status);
+            this.updateStatusItem(item.id, item.status, message);
         });
     }
 
