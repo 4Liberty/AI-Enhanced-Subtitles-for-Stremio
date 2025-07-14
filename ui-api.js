@@ -122,7 +122,7 @@ function setupUIRoutes(app) {
         try {
             const hasOpenSubtitles = !!process.env.OPENSUBTITLES_API_KEY;
             const hasSubDL = !!process.env.SUBDL_API_KEY;
-            const hasAI = !!(process.env.GEMINI_API_KEY || process.env.OPENAI_API_KEY || process.env.CLAUDE_API_KEY);
+            const hasAI = !!process.env.GEMINI_API_KEY;
             
             if (hasOpenSubtitles && hasSubDL && hasAI) {
                 res.json({ status: 'healthy', message: 'All subtitle services operational' });
@@ -133,50 +133,6 @@ function setupUIRoutes(app) {
             }
         } catch (error) {
             res.json({ status: 'error', message: 'Subtitle service check failed' });
-        }
-    });
-
-    app.get('/api/health/providers', async (req, res) => {
-        try {
-            const hasJackett = !!process.env.JACKETT_URL;
-            const scrapingEnabled = process.env.SCRAPING_ENABLED !== 'false';
-            
-            if (hasJackett && scrapingEnabled) {
-                res.json({ status: 'healthy', message: 'All providers operational' });
-            } else if (scrapingEnabled) {
-                res.json({ status: 'warning', message: 'Scraping enabled, Jackett not configured' });
-            } else {
-                res.json({ status: 'warning', message: 'Limited providers available' });
-            }
-        } catch (error) {
-            res.json({ status: 'error', message: 'Provider check failed' });
-        }
-    });
-
-    app.get('/api/health/keys', async (req, res) => {
-        try {
-            const keys = [
-                'GEMINI_API_KEY',
-                'OPENAI_API_KEY', 
-                'CLAUDE_API_KEY',
-                'OPENSUBTITLES_API_KEY',
-                'SUBDL_API_KEY',
-                'TMDB_API_KEY',
-                'REAL_DEBRID_API_KEY'
-            ];
-            
-            const configuredKeys = keys.filter(key => !!process.env[key]).length;
-            const totalKeys = keys.length;
-            
-            if (configuredKeys >= 4) {
-                res.json({ status: 'healthy', message: `${configuredKeys}/${totalKeys} API keys configured` });
-            } else if (configuredKeys >= 2) {
-                res.json({ status: 'warning', message: `${configuredKeys}/${totalKeys} API keys configured` });
-            } else {
-                res.json({ status: 'error', message: `Only ${configuredKeys}/${totalKeys} API keys configured` });
-            }
-        } catch (error) {
-            res.json({ status: 'error', message: 'API key check failed' });
         }
     });
     

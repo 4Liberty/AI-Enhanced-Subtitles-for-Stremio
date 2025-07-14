@@ -44,13 +44,6 @@ class StremioAddonUI {
             });
         });
 
-        // AI Provider selection
-        document.addEventListener('change', (e) => {
-            if (e.target.id === 'ai-provider') {
-                this.updateAiModelOptions();
-            }
-        });
-
         // Settings auto-save
         document.querySelectorAll('.form-input, .form-select, .toggle-input').forEach(input => {
             input.addEventListener('change', () => {
@@ -59,20 +52,8 @@ class StremioAddonUI {
         });
 
         // Import config file
-        document.getElementById('config-file')?.addEventListener('change', (e) => {
+        document.getElementById('config-file').addEventListener('change', (e) => {
             this.handleConfigImport(e);
-        });
-
-        // Save and Test buttons
-        document.addEventListener('click', (e) => {
-            if (e.target.closest('[onclick*="saveSettings"]')) {
-                e.preventDefault();
-                this.saveSettings();
-            }
-            if (e.target.closest('[onclick*="testApiKeys"]')) {
-                e.preventDefault();
-                this.testApiKeys();
-            }
         });
     }
 
@@ -458,7 +439,7 @@ class StremioAddonUI {
         };
 
         this.activityLog.unshift(activity);
-        if this.activityLog.length > 50) {
+        if (this.activityLog.length > 50) {
             this.activityLog = this.activityLog.slice(0, 50);
         }
 
@@ -482,59 +463,27 @@ class StremioAddonUI {
         });
     }
 
-    async loadSettings() {
-        try {
-            // Load from server
-            const response = await fetch('/api/settings');
-            const serverSettings = await response.json();
-            
-            // Merge with localStorage
-            const localSettings = localStorage.getItem('stremio-addon-settings');
-            if (localSettings) {
-                this.settings = { ...serverSettings, ...JSON.parse(localSettings) };
-            } else {
-                this.settings = serverSettings;
-            }
-            
+    loadSettings() {
+        const saved = localStorage.getItem('stremio-addon-settings');
+        if (saved) {
+            this.settings = JSON.parse(saved);
             this.applySettings();
-        } catch (error) {
-            console.error('Error loading settings:', error);
-            // Fallback to localStorage only
-            const saved = localStorage.getItem('stremio-addon-settings');
-            if (saved) {
-                this.settings = JSON.parse(saved);
-                this.applySettings();
-            }
         }
     }
 
     saveSettings() {
         const settings = {
-            // Language Settings
             primaryLanguage: document.getElementById('primary-language')?.value,
             fallbackLanguage: document.getElementById('fallback-language')?.value,
-            autoTranslate: document.getElementById('auto-translate')?.checked,
-            hearingImpaired: document.getElementById('hearing-impaired')?.checked,
-            
-            // AI Settings
             aiEnabled: document.getElementById('ai-enabled')?.checked,
-            aiProvider: document.getElementById('ai-provider')?.value,
             aiModel: document.getElementById('ai-model')?.value,
             correctionIntensity: document.getElementById('correction-intensity')?.value,
-            aiTemperature: document.getElementById('ai-temperature')?.value,
-            minSubtitleScore: document.getElementById('min-subtitle-score')?.value,
-            
-            // Advanced Settings
             debugMode: document.getElementById('debug-mode')?.checked,
             scrapingEnabled: document.getElementById('scraping-enabled')?.checked,
             cacheEnabled: document.getElementById('cache-enabled')?.checked,
             maxConcurrentRequests: document.getElementById('max-concurrent-requests')?.value,
             requestTimeout: document.getElementById('request-timeout')?.value,
-            
-            // API Keys
             geminiApiKey: document.getElementById('gemini-api-key')?.value,
-            openaiApiKey: document.getElementById('openai-api-key')?.value,
-            claudeApiKey: document.getElementById('claude-api-key')?.value,
             opensubtitlesApiKey: document.getElementById('opensubtitles-api-key')?.value,
             tmdbApiKey: document.getElementById('tmdb-api-key')?.value,
             subdlApiKey: document.getElementById('subdl-api-key')?.value,
@@ -543,28 +492,9 @@ class StremioAddonUI {
             jackettApiKey: document.getElementById('jackett-api-key')?.value
         };
 
-        // Save to server
-        fetch('/api/settings', {
-            method: 'POST',
-            headers: {
-                'Content-Type': 'application/json',
-            },
-            body: JSON.stringify(settings)
-        })
-        .then(response => response.json())
-        .then(data => {
-            if (data.success) {
-                this.settings = settings;
-                localStorage.setItem('stremio-addon-settings', JSON.stringify(settings));
-                this.showNotification('Settings saved successfully', 'success');
-            } else {
-                this.showNotification('Failed to save settings: ' + data.message, 'error');
-            }
-        })
-        .catch(error => {
-            console.error('Error saving settings:', error);
-            this.showNotification('Failed to save settings', 'error');
-        });
+        this.settings = settings;
+        localStorage.setItem('stremio-addon-settings', JSON.stringify(settings));
+        this.showNotification('Settings saved successfully', 'success');
     }
 
     applySettings() {
@@ -665,95 +595,27 @@ class StremioAddonUI {
     }
 
     async testApiKeys() {
+        this.showNotification('Testing API keys...', 'info');
+        
         try {
-            this.showNotification('Testing API keys...', 'info');
-            
             const response = await fetch('/api/test-keys', {
                 method: 'POST',
-                headers: {
-                    'Content-Type': 'application/json',
-                }
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify(this.settings)
             });
             
             const results = await response.json();
             
-            let successCount = 0;
-            let totalCount = 0;
             let message = 'API Key Test Results:\n';
-            
-            Object.keys(results).forEach(api => {
-                totalCount++;
-                const result = results[api];
-                if (result === 'success') {
-                    successCount++;
-                    message += `✅ ${api.toUpperCase()}: Working\n`;
-                } else if (result === 'not_configured') {
-                    message += `⚠️ ${api.toUpperCase()}: Not configured\n`;
-                } else {
-                    message += `❌ ${api.toUpperCase()}: Failed\n`;
-                }
+            Object.keys(results).forEach(key => {
+                message += `${key}: ${results[key] ? '✓' : '✗'}\n`;
             });
             
-            if (successCount === totalCount) {
-                this.showNotification('All configured API keys are working!', 'success');
-            } else if (successCount > 0) {
-                this.showNotification(`${successCount}/${totalCount} API keys working`, 'warning');
-            } else {
-                this.showNotification('No API keys are working', 'error');
-            }
-            
-            console.log(message);
-            
+            this.showNotification('API key test completed', 'success');
+            this.addToActivityLog('API keys tested', 'info');
         } catch (error) {
-            console.error('Error testing API keys:', error);
-            this.showNotification('Failed to test API keys', 'error');
+            this.showNotification('API key test failed', 'error');
         }
-    }
-
-    updateAiModelOptions() {
-        const provider = document.getElementById('ai-provider')?.value;
-        const modelSelect = document.getElementById('ai-model');
-        
-        if (!modelSelect) return;
-        
-        // Clear existing options
-        modelSelect.innerHTML = '';
-        
-        // Add models based on provider
-        let models = [];
-        switch (provider) {
-            case 'gemini':
-                models = [
-                    { value: 'gemini-pro', text: 'Gemini Pro' },
-                    { value: 'gemini-1.5-pro', text: 'Gemini 1.5 Pro' },
-                    { value: 'gemini-1.5-flash', text: 'Gemini 1.5 Flash' },
-                    { value: 'gemini-pro-vision', text: 'Gemini Pro Vision' }
-                ];
-                break;
-            case 'openai':
-                models = [
-                    { value: 'gpt-4', text: 'GPT-4' },
-                    { value: 'gpt-4-turbo', text: 'GPT-4 Turbo' },
-                    { value: 'gpt-3.5-turbo', text: 'GPT-3.5 Turbo' },
-                    { value: 'gpt-3.5-turbo-16k', text: 'GPT-3.5 Turbo 16K' }
-                ];
-                break;
-            case 'claude':
-                models = [
-                    { value: 'claude-3-opus-20240229', text: 'Claude 3 Opus' },
-                    { value: 'claude-3-sonnet-20240229', text: 'Claude 3 Sonnet' },
-                    { value: 'claude-3-haiku-20240307', text: 'Claude 3 Haiku' },
-                    { value: 'claude-2.1', text: 'Claude 2.1' }
-                ];
-                break;
-        }
-        
-        models.forEach(model => {
-            const option = document.createElement('option');
-            option.value = model.value;
-            option.textContent = model.text;
-            modelSelect.appendChild(option);
-        });
     }
 
     async clearCache() {
