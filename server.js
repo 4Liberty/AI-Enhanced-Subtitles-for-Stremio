@@ -4,7 +4,7 @@
 const express = require('express');
 const { addonBuilder, serveHTTP } = require('stremio-addon-sdk');
 const path = require('path');
-const { getAICorrectedSubtitle, getSubtitleUrlsForStremio, getCachedSubtitleContent, getProgressiveSubtitleContent, aiEnhancementStatus } = require('./lib/subtitleMatcher');
+const { getAICorrectedSubtitle, getSubtitleUrlsForStremio } = require('./lib/subtitleMatcher');
 const { streamEnricher } = require('./lib/streamEnricher');
 const { generateRealDebridStreams, generateSampleRealDebridStreams } = require('./lib/realDebridSearch');
 const { initializeStreamingProviders } = require('./lib/streamingProviderManager');
@@ -227,7 +227,13 @@ const subtitleHandler = async (args) => {
             return { subtitles: [] };
         }
         
-        const result = await getSubtitleUrlsForStremio(args.id, infoHash);
+        // Parse the ID to extract information
+        const isMovie = args.type === 'movie';
+        const season = args.type === 'series' ? args.season : null;
+        const episode = args.type === 'series' ? args.episode : null;
+        const type = args.type || 'movie';
+        
+        const result = await getSubtitleUrlsForStremio(args.id, type, season, episode, 'tr');
         if (result && result.subtitles && result.subtitles.length > 0) {
             console.log(`[Handler] Successfully generated ${result.subtitles.length} subtitle option(s).`);
             console.log(`[Handler] Subtitle options:`, JSON.stringify(result.subtitles, null, 2));
@@ -253,7 +259,7 @@ const streamHandler = async (args) => {
     if (movieId.startsWith('tt')) {
         console.log(`[Handler] Starting subtitle pre-caching for ${movieId}`);
         // Don't await this - let it run in background
-        getSubtitleUrlsForStremio(movieId, null)
+        getSubtitleUrlsForStremio(movieId, 'movie', null, null, 'tr')
             .then(result => {
                 if (result && result.subtitles && result.subtitles.length > 0) {
                     console.log(`[Handler] Pre-cached ${result.subtitles.length} subtitle option(s) for ${movieId}`);
