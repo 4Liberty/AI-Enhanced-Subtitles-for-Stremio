@@ -9,6 +9,9 @@ const { streamEnricher } = require('./lib/streamEnricher');
 const { initializeStreamingProviders, streamingManager } = require('./lib/streamingProviderManager');
 const { setupUIRoutes } = require('./ui-api');
 
+// Get the AI enhancement status map
+const aiEnhancementStatus = getAiEnhancementStatus();
+
 console.log("Starting Stremio AI Subtitle Addon v2.9.1 with Beautiful UI...");
 
 // Initialize Express app
