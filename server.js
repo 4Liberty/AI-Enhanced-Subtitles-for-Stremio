@@ -12,29 +12,118 @@ const { setupUIRoutes } = require('./ui-api');
 
 console.log("Starting Stremio AI Subtitle Addon v2.9.1 with Beautiful UI...");
 
-// Initialize streaming providers with MediaFusion-inspired architecture
-const streamingConfig = {
-    realdebrid: {
-        apiKey: process.env.REAL_DEBRID_API_KEY,
-        userIP: process.env.USER_IP || null
-    },
-    alldebrid: {
-        apiKey: process.env.ALL_DEBRID_API_KEY,
-        userIP: process.env.USER_IP || null
+// Initialize Express app
+const app = express();
+
+// Security middleware - add comprehensive security headers
+app.use((req, res, next) => {
+    // Prevent clickjacking
+    res.setHeader('X-Frame-Options', 'DENY');
+    
+    // Prevent MIME type sniffing
+    res.setHeader('X-Content-Type-Options', 'nosniff');
+    
+    // XSS protection
+    res.setHeader('X-XSS-Protection', '1; mode=block');
+    
+    // Content Security Policy
+    res.setHeader('Content-Security-Policy', "default-src 'self'; script-src 'self' 'unsafe-inline'; style-src 'self' 'unsafe-inline'; img-src 'self' data: https:; font-src 'self'; connect-src 'self' https:; frame-src 'none'; object-src 'none'");
+    
+    // Referrer Policy
+    res.setHeader('Referrer-Policy', 'strict-origin-when-cross-origin');
+    
+    // Permissions Policy
+    res.setHeader('Permissions-Policy', 'camera=(), microphone=(), geolocation=()');
+    
+    // Remove server information
+    res.removeHeader('X-Powered-By');
+    
+    next();
+});
+
+// Input validation middleware
+const validateInput = (req, res, next) => {
+    const { body, query, params } = req;
+    
+    // Validate all input parameters
+    const validateField = (value, fieldName) => {
+        if (typeof value === 'string') {
+            // Check for common injection patterns
+            const dangerousPatterns = [
+                /<script[^>]*>.*?<\/script>/gi,
+                /javascript:/gi,
+                /on\w+\s*=/gi,
+                /eval\s*\(/gi,
+                /Function\s*\(/gi,
+                /exec\s*\(/gi,
+                /\.\.\//g, // Path traversal
+                /\x00/g    // Null bytes
+            ];
+            
+            for (const pattern of dangerousPatterns) {
+                if (pattern.test(value)) {
+                    console.warn(`[Security] Dangerous pattern detected in ${fieldName}:`, value);
+                    return res.status(400).json({ error: `Invalid input detected in ${fieldName}` });
+                }
+            }
+            
+            // Length validation
+            if (value.length > 1000) {
+                console.warn(`[Security] Input too long in ${fieldName}:`, value.length);
+                return res.status(400).json({ error: `Input too long in ${fieldName}` });
+            }
+        }
+        return value;
+    };
+    
+    // Validate all request fields
+    try {
+        Object.keys(body || {}).forEach(key => validateField(body[key], key));
+        Object.keys(query || {}).forEach(key => validateField(query[key], key));
+        Object.keys(params || {}).forEach(key => validateField(params[key], key));
+    } catch (error) {
+        console.error('[Security] Input validation failed:', error);
+        return res.status(400).json({ error: 'Input validation failed' });
     }
+    
+    next();
 };
 
-const streamingManager = initializeStreamingProviders(streamingConfig);
-console.log("✅ Streaming providers initialized with MediaFusion architecture");
+// Apply input validation to all routes
+app.use(validateInput);
 
-console.log(`
-██╗  ██╗██████╗ ██╗     ███████╗██╗     ██╗██╗  ██╗██╗   ██╗██╗     ██╗██╗  ██╗
-██║  ██║██╔══██╗██║     ██╔════╝██║     ██║██║  ██║██║   ██║██║     ██║██║  ██║
-███████║██████╔╝██║     █████╗  ██║     ██║███████║██║   ██║██║     ██║███████║
-██╔══██║██╔═══╝ ██║     ██╔══╝  ██║     ██║██╔══██║██║   ██║██║     ██║██╔══██║
-██║  ██║██║     ██║     ███████╗███████╗██║██║  ██║╚██████╔╝███████╗██║██║  ██║
-╚═╝  ╚═╝╚═╝     ╚═╝     ╚══════╝╚══════╝╚═╝╚═╝  ╚═╝ ╚═════╝ ╚══════╝╚═╝╚═╝  ╚═╝
-`);
+// Request size limiting
+app.use(express.json({ limit: '10mb' }));
+app.use(express.urlencoded({ limit: '10mb', extended: true }));
+
+// Environment variable validation
+const validateEnvironmentVariables = () => {
+    const requiredVars = ['OPENSUBTITLES_API_KEY', 'SUBDL_API_KEY'];
+    const missingVars = requiredVars.filter(varName => !process.env[varName]);
+    
+    if (missingVars.length > 0) {
+        console.warn('⚠️  Missing required environment variables:', missingVars);
+        console.warn('⚠️  Some features may be disabled');
+    }
+    
+    // Validate API key formats
+    const apiKeys = {
+        'OPENSUBTITLES_API_KEY': process.env.OPENSUBTITLES_API_KEY,
+        'SUBDL_API_KEY': process.env.SUBDL_API_KEY,
+        'GEMINI_API_KEY': process.env.GEMINI_API_KEY,
+        'REAL_DEBRID_API_KEY': process.env.REAL_DEBRID_API_KEY,
+        'ALL_DEBRID_API_KEY': process.env.ALL_DEBRID_API_KEY
+    };
+    
+    Object.entries(apiKeys).forEach(([name, key]) => {
+        if (key && key.length < 10) {
+            console.warn(`⚠️  ${name} appears to be too short`);
+        }
+        if (key && (key.includes('test') || key.includes('dummy') || key.includes('example'))) {
+            console.warn(`⚠️  ${name} appears to be a test key`);
+        }
+    });
+};
 
 // Check for required environment variables
 const requiredEnvVars = [
@@ -80,6 +169,9 @@ if (!process.env.REAL_DEBRID_API_KEY) {
 if (!process.env.ALL_DEBRID_API_KEY) {
     console.log("  To get ALL_DEBRID_API_KEY: Visit https://alldebrid.com/api/ and get an API key");
 }
+
+// Run environment variable validation
+validateEnvironmentVariables();
 
 console.log("\n🎨 Beautiful UI will be available at: http://localhost:7000/ui");
 console.log("📊 Advanced health monitoring and settings included!");
@@ -293,7 +385,6 @@ builder.defineSubtitlesHandler(subtitleHandler);
 builder.defineStreamHandler(streamHandler);
 
 const addonInterface = builder.getInterface();
-const app = express();
 const port = process.env.PORT || 7000;
 
 // Add CORS headers for all responses (MUST BE FIRST for Stremio addon installation)
