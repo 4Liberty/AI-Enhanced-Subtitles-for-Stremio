@@ -196,7 +196,7 @@ const manifest = {
     version: "2.9.5",
     name: "AI Subtitle Corrector (TR) + Multi-Debrid Enhanced",
     description: "Provides AI-corrected Turkish subtitles with hash matching, multiple sources, enhanced Real-Debrid & AllDebrid cached streams with MediaFusion architecture, and stream provision for reliable hash access.",
-    logo: "https://your-heroku-app.herokuapp.com/logo.svg",
+    logo: "/logo.svg",
     resources: ["subtitles", "stream"], // Include stream for reliable hash provision
     types: ["movie", "series"],
     idPrefixes: ["tt", "tmdb"],
@@ -277,8 +277,8 @@ const streamHandler = async (args) => {
         // Don't await this - let it run in background
         getSubtitleUrlsForStremio(movieId, 'movie', null, null, 'tr')
             .then(result => {
-                if (result && result.subtitles && result.subtitles.length > 0) {
-                    console.log(`[Handler] Pre-cached ${result.subtitles.length} subtitle option(s) for ${movieId}`);
+                if (result && result.length > 0) {
+                    console.log(`[Handler] Pre-cached ${result.length} subtitle option(s) for ${movieId}`);
                 } else {
                     console.log(`[Handler] No subtitles found during pre-caching for ${movieId}`);
                 }
@@ -583,9 +583,9 @@ app.post('/subtitles/:type/:id', async (req, res) => {
     try {
         const args = { type, id, extra: req.body?.extra || {} };
         const result = await subtitleHandler(args);
-        result.subtitles = absolutizeSubtitleUrls(result, req).subtitles;
-        console.log(`[Express] POST result:`, JSON.stringify(result, null, 2));
-        res.json(result);
+        const absolutizedResult = absolutizeSubtitleUrls(result, req);
+        console.log(`[Express] POST result:`, JSON.stringify(absolutizedResult, null, 2));
+        res.json(absolutizedResult);
     } catch (err) {
         console.error('[Express] Error in subtitles POST endpoint:', err);
         res.status(500).json({ subtitles: [] });
@@ -598,9 +598,9 @@ app.get('/subtitles/:type/:id', async (req, res) => {
     try {
         const args = { type, id, extra: req.query || {} };
         const result = await subtitleHandler(args);
-        result.subtitles = absolutizeSubtitleUrls(result, req).subtitles;
-        console.log(`[Express] GET result:`, JSON.stringify(result, null, 2));
-        res.json(result);
+        const absolutizedResult = absolutizeSubtitleUrls(result, req);
+        console.log(`[Express] GET result:`, JSON.stringify(absolutizedResult, null, 2));
+        res.json(absolutizedResult);
     } catch (err) {
         console.error('[Express] Error in subtitles GET endpoint:', err);
         res.status(500).json({ subtitles: [] });
@@ -614,9 +614,9 @@ app.get('/subtitles/:type/:id.json', async (req, res) => {
     try {
         const args = { type, id, extra: req.query || {} };
         const result = await subtitleHandler(args);
-        result.subtitles = absolutizeSubtitleUrls(result, req).subtitles;
-        console.log(`[Express] .json result:`, JSON.stringify(result, null, 2));
-        res.json(result);
+        const absolutizedResult = absolutizeSubtitleUrls(result, req);
+        console.log(`[Express] .json result:`, JSON.stringify(absolutizedResult, null, 2));
+        res.json(absolutizedResult);
     } catch (err) {
         console.error('[Express] Error in subtitles .json endpoint:', err);
         res.status(500).json({ subtitles: [] });
@@ -630,9 +630,9 @@ app.get('/subtitles/:type/:id/:filename', async (req, res) => {
     try {
         const args = { type, id, extra: req.query || {} };
         const result = await subtitleHandler(args);
-        result.subtitles = absolutizeSubtitleUrls(result, req).subtitles;
-        console.log(`[Express] Filename result:`, JSON.stringify(result, null, 2));
-        res.json(result);
+        const absolutizedResult = absolutizeSubtitleUrls(result, req);
+        console.log(`[Express] Filename result:`, JSON.stringify(absolutizedResult, null, 2));
+        res.json(absolutizedResult);
     } catch (err) {
         console.error('[Express] Error in subtitles filename endpoint:', err);
         res.status(500).json({ subtitles: [] });
@@ -646,9 +646,9 @@ app.get('/subtitles/:type/:id/:filename.json', async (req, res) => {
     try {
         const args = { type, id, extra: req.query || {} };
         const result = await subtitleHandler(args);
-        result.subtitles = absolutizeSubtitleUrls(result, req).subtitles;
-        console.log(`[Express] Filename.json result:`, JSON.stringify(result, null, 2));
-        res.json(result);
+        const absolutizedResult = absolutizeSubtitleUrls(result, req);
+        console.log(`[Express] Filename.json result:`, JSON.stringify(absolutizedResult, null, 2));
+        res.json(absolutizedResult);
     } catch (err) {
         console.error('[Express] Error in subtitles filename.json endpoint:', err);
         res.status(500).json({ subtitles: [] });
