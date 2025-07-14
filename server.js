@@ -234,13 +234,14 @@ const subtitleHandler = async (args) => {
         const type = args.type || 'movie';
         
         const result = await getSubtitleUrlsForStremio(args.id, type, season, episode, 'tr');
-        if (result && result.subtitles && result.subtitles.length > 0) {
-            console.log(`[Handler] Successfully generated ${result.subtitles.length} subtitle option(s).`);
-            console.log(`[Handler] Subtitle options:`, JSON.stringify(result.subtitles, null, 2));
+        if (result && result.length > 0) {
+            console.log(`[Handler] Successfully generated ${result.length} subtitle option(s).`);
+            console.log(`[Handler] Subtitle options:`, JSON.stringify(result, null, 2));
+            return { subtitles: result };
         } else {
             console.log(`[Handler] No subtitles found for ${args.id}`);
+            return { subtitles: [] };
         }
-        return result;
     } catch (error) {
         console.error("[Handler] Error in subtitle handler:", error);
         return { subtitles: [] };
