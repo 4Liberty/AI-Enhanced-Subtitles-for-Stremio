@@ -23,6 +23,20 @@ class StremioAddonUI {
         console.log('Initializing Enhanced Stremio Addon UI...');
         
         try {
+            // Check if DOM is ready
+            if (document.readyState === 'loading') {
+                document.addEventListener('DOMContentLoaded', () => this.initializeAfterDOM());
+            } else {
+                this.initializeAfterDOM();
+            }
+        } catch (error) {
+            console.error('Critical error during UI initialization:', error);
+            this.showNotification('System initialization failed - please refresh the page', 'error');
+        }
+    }
+
+    initializeAfterDOM() {
+        try {
             // Setup event listeners first
             this.setupEventListeners();
             
@@ -278,14 +292,35 @@ class StremioAddonUI {
             console.log('Fetching dashboard data...');
             const response = await fetch('/api/dashboard');
             if (!response.ok) {
-                throw new Error(`HTTP error! status: ${response.status}`);
+                console.warn(`Dashboard API returned ${response.status}`);
+                // Return fallback data instead of null
+                return {
+                    subtitlesProcessed: 0,
+                    torrentsFound: 0,
+                    activeProviders: 0,
+                    uptime: 0,
+                    memoryUsage: 0,
+                    successRate: 0,
+                    status: 'warning',
+                    message: 'API not responding'
+                };
             }
             const data = await response.json();
             console.log('Dashboard data fetched successfully');
             return data;
         } catch (error) {
             console.error('Error fetching dashboard data:', error);
-            return null;
+            // Return fallback data instead of null
+            return {
+                subtitlesProcessed: 0,
+                torrentsFound: 0,
+                activeProviders: 0,
+                uptime: 0,
+                memoryUsage: 0,
+                successRate: 0,
+                status: 'error',
+                message: 'Failed to fetch data'
+            };
         }
     }
 
