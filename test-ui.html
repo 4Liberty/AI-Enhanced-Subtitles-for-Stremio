@@ -1,0 +1,198 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>UI Test - VLSub OpenSubtitles</title>
+    <style>
+        body {
+            font-family: Arial, sans-serif;
+            margin: 20px;
+            background: #1a202c;
+            color: #e2e8f0;
+        }
+        .test-section {
+            margin: 20px 0;
+            padding: 15px;
+            background: #2d3748;
+            border-radius: 8px;
+            border: 1px solid #4a5568;
+        }
+        .test-button {
+            background: #48bb78;
+            color: white;
+            border: none;
+            padding: 10px 20px;
+            margin: 5px;
+            border-radius: 5px;
+            cursor: pointer;
+        }
+        .test-button:hover {
+            background: #38a169;
+        }
+        .log {
+            background: #1a202c;
+            padding: 10px;
+            margin: 10px 0;
+            border-radius: 5px;
+            max-height: 200px;
+            overflow-y: auto;
+            font-family: monospace;
+        }
+        .nav-tabs {
+            display: flex;
+            margin-bottom: 20px;
+        }
+        .nav-tab {
+            background: #2d3748;
+            color: #e2e8f0;
+            border: 1px solid #4a5568;
+            padding: 10px 20px;
+            margin-right: 5px;
+            border-radius: 5px 5px 0 0;
+            cursor: pointer;
+        }
+        .nav-tab.active {
+            background: #48bb78;
+            color: white;
+        }
+        .tab-content {
+            display: none;
+            padding: 20px;
+            background: #2d3748;
+            border: 1px solid #4a5568;
+            border-radius: 0 5px 5px 5px;
+        }
+        .tab-content.active {
+            display: block;
+        }
+    </style>
+</head>
+<body>
+    <h1>UI Functionality Test</h1>
+    
+    <div class="test-section">
+        <h2>Tab Navigation Test</h2>
+        <nav class="nav-tabs">
+            <button class="nav-tab active" data-tab="tab1">Tab 1</button>
+            <button class="nav-tab" data-tab="tab2">Tab 2</button>
+            <button class="nav-tab" data-tab="tab3">Tab 3</button>
+        </nav>
+        
+        <div class="tab-content active" id="tab1">
+            <h3>Tab 1 Content</h3>
+            <p>This is the first tab content.</p>
+        </div>
+        
+        <div class="tab-content" id="tab2">
+            <h3>Tab 2 Content</h3>
+            <p>This is the second tab content.</p>
+        </div>
+        
+        <div class="tab-content" id="tab3">
+            <h3>Tab 3 Content</h3>
+            <p>This is the third tab content.</p>
+        </div>
+    </div>
+    
+    <div class="test-section">
+        <h2>JavaScript Console Test</h2>
+        <button class="test-button" onclick="testConsole()">Test Console Log</button>
+        <button class="test-button" onclick="testTabSwitch()">Test Tab Switch</button>
+        <button class="test-button" onclick="testInitialization()">Test Initialization</button>
+        <div id="log" class="log"></div>
+    </div>
+    
+    <div class="test-section">
+        <h2>API Test</h2>
+        <button class="test-button" onclick="testAPI()">Test Dashboard API</button>
+        <div id="api-result" class="log"></div>
+    </div>
+
+    <script>
+        function log(message) {
+            const logDiv = document.getElementById('log');
+            logDiv.innerHTML += new Date().toLocaleTimeString() + ': ' + message + '<br>';
+            logDiv.scrollTop = logDiv.scrollHeight;
+        }
+        
+        function testConsole() {
+            console.log('Console test - this should appear in browser console');
+            log('Console test executed - check browser console');
+        }
+        
+        function testTabSwitch() {
+            log('Testing tab switch functionality...');
+            
+            // Test tab switching
+            const tabs = document.querySelectorAll('.nav-tab');
+            const contents = document.querySelectorAll('.tab-content');
+            
+            tabs.forEach(tab => {
+                tab.addEventListener('click', (e) => {
+                    const tabName = e.target.dataset.tab;
+                    log(`Tab clicked: ${tabName}`);
+                    
+                    // Remove active class from all tabs
+                    tabs.forEach(t => t.classList.remove('active'));
+                    contents.forEach(c => c.classList.remove('active'));
+                    
+                    // Add active class to clicked tab and corresponding content
+                    e.target.classList.add('active');
+                    document.getElementById(tabName).classList.add('active');
+                    
+                    log(`Tab switched to: ${tabName}`);
+                });
+            });
+            
+            log('Tab switch listeners added successfully');
+        }
+        
+        function testInitialization() {
+            log('Testing initialization...');
+            
+            // Test if DOM is ready
+            if (document.readyState === 'loading') {
+                log('DOM is still loading');
+            } else {
+                log('DOM is ready');
+            }
+            
+            // Test element selection
+            const testElement = document.querySelector('.nav-tab');
+            if (testElement) {
+                log('Element selection working: ' + testElement.textContent);
+            } else {
+                log('ERROR: Element selection failed');
+            }
+            
+            log('Initialization test complete');
+        }
+        
+        async function testAPI() {
+            const resultDiv = document.getElementById('api-result');
+            resultDiv.innerHTML = 'Testing API...<br>';
+            
+            try {
+                const response = await fetch('/api/dashboard');
+                const data = await response.json();
+                resultDiv.innerHTML += 'API Response: ' + JSON.stringify(data, null, 2);
+            } catch (error) {
+                resultDiv.innerHTML += 'API Error: ' + error.message;
+            }
+        }
+        
+        // Auto-initialize when page loads
+        document.addEventListener('DOMContentLoaded', () => {
+            log('DOM Content Loaded event fired');
+            testTabSwitch();
+        });
+        
+        // Fallback if DOM already loaded
+        if (document.readyState !== 'loading') {
+            log('DOM already loaded - running fallback initialization');
+            testTabSwitch();
+        }
+    </script>
+</body>
+</html>
