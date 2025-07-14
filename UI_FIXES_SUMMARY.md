@@ -92,6 +92,21 @@
   - Added chart resize handling
 - **Files Modified**: `ui/styles.css`
 
+### 12. **Added Gemini 2.5 Flash-Lite Preview Support** ✅
+- **Problem**: Missing the latest cost-efficient Gemini model optimized for high throughput and low latency
+- **Fix**: 
+  - Added `gemini-2.5-flash-lite-preview-06-17` to model selection dropdowns
+  - Updated default model from experimental versions to the stable Flash-Lite Preview
+  - Added descriptive text explaining the model's benefits (cost efficiency, low latency)
+  - Updated backend integration to support the new model
+- **Files Modified**: `ui/index.html`, `lib/subtitleMatcher.js`, `ui-api.js`, `test-ui-fixes.js`
+
+### Model Benefits:
+- **Gemini 2.5 Flash-Lite Preview**: Most cost-efficient model supporting high throughput, ideal for real-time subtitle processing
+- **Better Performance**: Optimized for low latency which is perfect for subtitle correction tasks
+- **Cost Savings**: More economical than previous models while maintaining quality
+- **Modern Architecture**: Latest stable preview version with improved capabilities
+
 ## Technical Improvements
 
 ### Backend API Endpoints Added:

@@ -24,14 +24,14 @@ requiredFiles.forEach(file => {
     }
 });
 
-// Test 2: Check if Gemini 2.0 Flash is in the HTML
-console.log('\n2. Checking Gemini 2.0 Flash model...');
+// Test 2: Check if Gemini 2.5 Flash-Lite is in the HTML
+console.log('\n2. Checking Gemini 2.5 Flash-Lite model...');
 const fs = require('fs');
 const htmlContent = fs.readFileSync('ui/index.html', 'utf8');
-if (htmlContent.includes('gemini-2.0-flash')) {
-    console.log('   ✓ Gemini 2.0 Flash model added');
+if (htmlContent.includes('gemini-2.5-flash-lite-preview-06-17')) {
+    console.log('   ✓ Gemini 2.5 Flash-Lite Preview model added');
 } else {
-    console.log('   ✗ Gemini 2.0 Flash model missing');
+    console.log('   ✗ Gemini 2.5 Flash-Lite Preview model missing');
 }
 
 // Test 3: Check if CSS dropdown fix is present

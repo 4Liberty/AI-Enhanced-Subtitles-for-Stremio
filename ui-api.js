@@ -468,7 +468,7 @@ function setupUIRoutes(app) {
         try {
             const settings = {
                 aiProvider: process.env.AI_PROVIDER || 'gemini',
-                aiModel: process.env.AI_MODEL || 'gemini-1.5-flash',
+                aiModel: process.env.AI_MODEL || 'gemini-2.5-flash-lite-preview-06-17',
                 correctionIntensity: process.env.CORRECTION_INTENSITY || '7',
                 aiTemperature: process.env.AI_TEMPERATURE || '0.3',
                 primaryLanguage: process.env.PRIMARY_LANGUAGE || 'tr',
