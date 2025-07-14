@@ -30,8 +30,12 @@ class StremioAddonUI {
         // Tab navigation
         document.querySelectorAll('.nav-tab').forEach(tab => {
             tab.addEventListener('click', (e) => {
-                const tabName = e.target.dataset.tab;
-                this.switchTab(tabName);
+                e.preventDefault();
+                // Get the tab name from the clicked element or its parent
+                const tabName = e.target.dataset.tab || e.target.closest('.nav-tab').dataset.tab;
+                if (tabName) {
+                    this.switchTab(tabName);
+                }
             });
         });
 
