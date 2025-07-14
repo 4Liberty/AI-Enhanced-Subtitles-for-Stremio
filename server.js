@@ -1079,24 +1079,43 @@ app.get('/api/performance/metrics', (req, res) => {
 app.get('/api/environment/status', (req, res) => {
     try {
         const envStatus = {
-            realdebrid: {
-                available: !!process.env.REALDEBRID_API_KEY,
-                source: process.env.REALDEBRID_API_KEY ? 'environment' : 'none'
+            gemini: {
+                available: !!process.env.GEMINI_API_KEY,
+                configured: !!process.env.GEMINI_API_KEY
             },
-            alldebrid: {
-                available: !!process.env.ALLDEBRID_API_KEY,
-                source: process.env.ALL_DEBRID_API_KEY ? 'environment' : 'none'
+            openai: {
+                available: !!process.env.OPENAI_API_KEY,
+                configured: !!process.env.OPENAI_API_KEY
+            },
+            realDebrid: {
+                available: !!process.env.REAL_DEBRID_API_KEY,
+                configured: !!process.env.REAL_DEBRID_API_KEY
+            },
+            premiumize: {
+                available: !!process.env.PREMIUMIZE_API_KEY,
+                configured: !!process.env.PREMIUMIZE_API_KEY
             },
             opensubtitles: {
                 available: !!process.env.OPENSUBTITLES_API_KEY,
-                source: process.env.OPENSUBTITLES_API_KEY ? 'environment' : 'none'
+                configured: !!process.env.OPENSUBTITLES_API_KEY
             },
-            fallbackEnabled: !!(process.env.REAL_DEBRID_API_KEY || process.env.ALL_DEBRID_API_KEY || process.env.OPENSUBTITLES_API_KEY)
+            subdl: {
+                available: !!process.env.SUBDL_API_KEY,
+                configured: !!process.env.SUBDL_API_KEY
+            },
+            database: {
+                available: true,
+                configured: true
+            }
         };
         
         res.json(envStatus);
     } catch (error) {
-        res.status(500).json({ error: 'Failed to get environment status' });
+        console.error('Environment status error:', error);
+        res.status(500).json({
+            error: 'Failed to retrieve environment status',
+            details: error.message
+        });
     }
 });
 
@@ -1206,6 +1225,71 @@ function saveUserConfig(config) {
     console.log('[Config] User configuration updated');
     return userConfig;
 }
+
+// Settings endpoint
+app.get('/api/settings', (req, res) => {
+    try {
+        res.json({
+            settings: {
+                aiProvider: process.env.AI_PROVIDER || 'gemini',
+                aiModel: process.env.AI_MODEL || 'gemini-pro',
+                correctionIntensity: parseInt(process.env.CORRECTION_INTENSITY || '50'),
+                aiTemperature: parseFloat(process.env.AI_TEMPERATURE || '0.7'),
+                primaryLanguage: process.env.PRIMARY_LANGUAGE || 'tr',
+                fallbackLanguage: process.env.FALLBACK_LANGUAGE || 'en',
+                autoTranslate: process.env.AUTO_TRANSLATE === 'true',
+                hearingImpaired: process.env.HEARING_IMPAIRED === 'true',
+                aiEnabled: process.env.AI_ENABLED !== 'false',
+                debugMode: process.env.DEBUG_MODE === 'true',
+                scrapingEnabled: process.env.SCRAPING_ENABLED !== 'false',
+                cacheEnabled: process.env.CACHE_ENABLED !== 'false',
+                maxConcurrentRequests: parseInt(process.env.MAX_CONCURRENT_REQUESTS || '5'),
+                requestTimeout: parseInt(process.env.REQUEST_TIMEOUT || '30'),
+                minSubtitleScore: parseFloat(process.env.MIN_SUBTITLE_SCORE || '0.7')
+            },
+            status: 'success'
+        });
+    } catch (error) {
+        console.error('Settings retrieval error:', error);
+        res.status(500).json({
+            error: 'Failed to retrieve settings',
+            details: error.message
+        });
+    }
+});
+
+// Settings update endpoint
+app.post('/api/settings', express.json(), (req, res) => {
+    try {
+        const { settings } = req.body;
+        
+        if (!settings || typeof settings !== 'object') {
+            return res.status(400).json({
+                error: 'Invalid settings format'
+            });
+        }
+        
+        // Update settings in memory (in production, you might want to persist these)
+        Object.entries(settings).forEach(([key, value]) => {
+            if (value !== undefined && value !== null) {
+                const envKey = key.replace(/([A-Z])/g, '_$1').toUpperCase();
+                process.env[envKey] = String(value);
+            }
+        });
+        
+        res.json({
+            success: true,
+            message: 'Settings updated successfully',
+            settings: settings
+        });
+    } catch (error) {
+        console.error('Settings update error:', error);
+        res.status(500).json({
+            error: 'Failed to update settings',
+            details: error.message
+        });
+    }
+});
 
 app.listen(port, () => {
     console.log(`\n🚀 Stremio AI Subtitle & Enhanced Real-Debrid Addon is running!`);
