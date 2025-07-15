@@ -1,3 +1,37 @@
+// Utility: Convert TMDB ID to IMDb ID using TMDB API if needed, with in-memory cache and logging
+const tmdbToImdbCache = new Map();
+const tmdbToImdb = async (tmdbId) => {
+    if (!tmdbId) return null;
+    if (tmdbToImdbCache.has(tmdbId)) {
+        return tmdbToImdbCache.get(tmdbId);
+    }
+    if (!process.env.TMDB_API_KEY) {
+        console.warn('[TMDB->IMDb] TMDB_API_KEY not set, cannot convert.');
+        return null;
+    }
+    try {
+        const fetch = require('node-fetch');
+        const url = `https://api.themoviedb.org/3/movie/${tmdbId}/external_ids?api_key=${process.env.TMDB_API_KEY}`;
+        console.log(`[TMDB->IMDb] Fetching IMDb ID for TMDB:${tmdbId}`);
+        const resp = await fetch(url);
+        if (!resp.ok) {
+            console.warn(`[TMDB->IMDb] TMDB API response not ok for TMDB:${tmdbId}`);
+            return null;
+        }
+        const data = await resp.json();
+        if (data.imdb_id && data.imdb_id.startsWith('tt')) {
+            tmdbToImdbCache.set(tmdbId, data.imdb_id);
+            console.log(`[TMDB->IMDb] TMDB:${tmdbId} => IMDb:${data.imdb_id}`);
+            return data.imdb_id;
+        }
+        console.warn(`[TMDB->IMDb] No IMDb ID found for TMDB:${tmdbId}`);
+        return null;
+    } catch (e) {
+        console.error('[TMDB->IMDb] Conversion error:', e);
+        return null;
+    }
+};
+
 // Robust handler for Stremio subtitle requests (JSON API)
 app.get('/subtitles/movie/:id/:params.json', async (req, res) => {
     try {
@@ -5,7 +39,6 @@ app.get('/subtitles/movie/:id/:params.json', async (req, res) => {
         // Parse extra info from params (filename, videoSize, etc.)
         const extra = {};
         if (params) {
-            // Example: filename=The Matrix (1999) 2160p UHD ... &videoSize=21324512625
             const paramPairs = params.split('&');
             for (const pair of paramPairs) {
                 const [key, value] = pair.split('=');
@@ -14,12 +47,20 @@ app.get('/subtitles/movie/:id/:params.json', async (req, res) => {
         }
         // Accept language from query or default to 'tr'
         const language = req.query.language || 'tr';
-        // Use TMDB/IMDB ID normalization if needed
+        // Normalize ID: convert TMDB to IMDb if needed
         let imdbId = id;
         if (imdbId.startsWith('tt')) {
             // already IMDB
         } else if (imdbId.startsWith('tmdb:')) {
-            imdbId = imdbId.replace('tmdb:', '');
+            const tmdbNum = imdbId.replace('tmdb:', '');
+            const converted = await tmdbToImdb(tmdbNum);
+            if (converted) {
+                imdbId = converted;
+            } else {
+                // If conversion fails, gracefully return no subtitles
+                console.warn(`[Subtitles JSON Handler] Could not convert TMDB:${tmdbNum} to IMDb.`);
+                return res.json({ subtitles: [], error: 'Could not convert TMDB to IMDb. Please check TMDB ID or API key.' });
+            }
         }
         // Call advanced subtitle logic
         const subtitles = await getSubtitleUrlsForStremio(imdbId, 'movie', extra.season, extra.episode, language, extra.infoHash || null);
@@ -266,7 +307,7 @@ const manifest = {
 
 const builder = new addonBuilder(manifest);
 
-// Enhanced subtitle handler with better error handling
+// Enhanced subtitle handler with robust TMDB-to-IMDb conversion
 const subtitleHandler = async (args) => {
     console.log(`[Handler] Subtitle request received for: ${args.id}`);
     const infoHash = args.extra && args.extra.video_hash ? args.extra.video_hash : null;
@@ -274,7 +315,19 @@ const subtitleHandler = async (args) => {
     const season = args.type === 'series' ? args.season : null;
     const episode = args.type === 'series' ? args.episode : null;
     const language = 'tr';
-    const imdbId = args.id;
+    let imdbId = args.id;
+    if (imdbId.startsWith('tt')) {
+        // already IMDB
+    } else if (imdbId.startsWith('tmdb:')) {
+        const tmdbNum = imdbId.replace('tmdb:', '');
+        const converted = await tmdbToImdb(tmdbNum);
+        if (converted) {
+            imdbId = converted;
+        } else {
+            console.warn(`[Handler] Could not convert TMDB to IMDb for ${imdbId}`);
+            return { subtitles: [] };
+        }
+    }
 
     // 1. Try hash-matched subtitles first for perfect sync
     if (infoHash) {
@@ -330,19 +383,29 @@ const subtitleHandler = async (args) => {
     return { subtitles: [] };
 };
 
-// Enhanced stream handler with better error handling
+// Enhanced stream handler with robust TMDB-to-IMDb conversion
 const streamHandler = async (args) => {
     console.log(`[Handler] Stream request received for: ${args.id}`);
-    
     try {
         // Extract the clean movie ID (remove .json extension if present)
-        const movieId = args.id.replace('.json', '');
+        let movieId = args.id.replace('.json', '');
+        // Normalize ID: convert TMDB to IMDb if needed
+        if (movieId.startsWith('tt')) {
+            // already IMDB
+        } else if (movieId.startsWith('tmdb:')) {
+            const tmdbNum = movieId.replace('tmdb:', '');
+            const converted = await tmdbToImdb(tmdbNum);
+            if (converted) {
+                movieId = converted;
+            } else {
+                console.warn(`[Handler] Could not convert TMDB to IMDb for ${movieId}`);
+                return { streams: [] };
+            }
+        }
         console.log(`[Handler] Clean movie ID for stream provision: ${movieId}`);
-        
         // Pre-cache subtitles in the background for faster response when user clicks play
         if (movieId.startsWith('tt')) {
             console.log(`[Handler] Starting subtitle pre-caching for ${movieId}`);
-            // Don't await this - let it run in background
             getSubtitleUrlsForStremio(movieId, 'movie', null, null, 'tr')
                 .then(result => {
                     if (result && result.length > 0) {
@@ -355,9 +418,7 @@ const streamHandler = async (args) => {
                     console.error(`[Handler] Pre-caching failed for ${movieId}:`, err);
                 });
         }
-        
         const streams = [];
-        
         // Try enhanced MediaFusion architecture if available
         if (movieId.startsWith('tt') && streamingManager) {
             console.log(`[Handler] Searching with enhanced MediaFusion architecture...`);
@@ -366,20 +427,15 @@ const streamHandler = async (args) => {
                     type: 'movie',
                     maxResults: 20
                 });
-                
                 if (cachedSearch.success && cachedSearch.totalResults > 0) {
                     console.log(`[Handler] Found ${cachedSearch.totalResults} cached results across providers`);
-                    
-                    // Convert cached search results to stream format
                     for (const providerResult of cachedSearch.providers) {
                         if (providerResult.success && providerResult.results.length > 0) {
                             for (const result of providerResult.results) {
-                                // Enrich stream with MediaFusion patterns
                                 const enrichedStream = await streamEnricher.enrichStream(result, {
                                     preferredProvider: providerResult.provider,
                                     includeSubtitles: true
                                 });
-                                
                                 streams.push({
                                     title: `🎬 ${enrichedStream.filename || result.filename} [${enrichedStream.quality?.resolution || 'Unknown'}]`,
                                     url: enrichedStream.streaming?.streamUrl || `magnet:?xt=urn:btih:${result.hash}`,
@@ -405,7 +461,6 @@ const streamHandler = async (args) => {
                 console.error(`[Handler] MediaFusion search error:`, e);
             }
         }
-        
         // Fallback to basic enrichment if no MediaFusion results
         if (streams.length === 0) {
             console.log(`[Handler] Trying basic stream enrichment...`);
@@ -419,17 +474,14 @@ const streamHandler = async (args) => {
                 console.error(`[Handler] Basic stream enrichment error:`, e);
             }
         }
-        
         // Final fallback: Hash-based subtitle matching streams
         if (streams.length === 0) {
             console.log(`[Handler] No streams found, providing hash-matching streams for subtitle sync`);
-            
             const sampleHashes = [
                 { title: 'Hash-Match 1080p', infoHash: '3a4b5c6d7e8f9a0b1c2d3e4f5a6b7c8d9e0f1a2b', quality: '1080p' },
                 { title: 'Hash-Match 720p', infoHash: '1a2b3c4d5e6f7a8b9c0d1e2f3a4b5c6d7e8f9a0b', quality: '720p' },
                 { title: 'Hash-Match 4K', infoHash: '9a0b1c2d3e4f5a6b7c8d9e0f1a2b3c4d5e6f7a8b', quality: '4K' }
             ];
-            
             for (const sample of sampleHashes) {
                 streams.push({
                     title: `${sample.title} (Subtitle Hash-Matching)`,
@@ -446,10 +498,8 @@ const streamHandler = async (args) => {
                 });
             }
         }
-        
         console.log(`[Handler] Providing ${streams.length} total streams`);
         return { streams };
-        
     } catch (error) {
         console.error("[Handler] Error in stream handler:", error);
         return { streams: [] };
@@ -562,17 +612,29 @@ app.get('/manifest.json', (req, res) => {
     res.send(JSON.stringify(addonInterface.manifest, null, 2));
 });
 
-// Enhanced .srt route with better error handling and fallback to clean version
+// Enhanced .srt route with TMDB-to-IMDb conversion, better error handling, and fallback to clean version
 app.get('/subtitles/:videoId/:language.srt', async (req, res) => {
-    const { videoId, language } = req.params;
+    let { videoId, language } = req.params;
     const { hash, test, fallback, source, progressive, processing } = req.query;
-    
+    // TMDB-to-IMDb conversion for .srt endpoint
+    if (videoId && videoId.startsWith('tmdb:')) {
+        const tmdbNum = videoId.replace('tmdb:', '');
+        const converted = await tmdbToImdb(tmdbNum);
+        if (converted) {
+            console.log(`[SRT Endpoint] TMDB:${tmdbNum} => IMDb:${converted}`);
+            videoId = converted;
+        } else {
+            console.warn(`[SRT Endpoint] Could not convert TMDB:${tmdbNum} to IMDb.`);
+            return res.status(404).send('Subtitle not found (TMDB-to-IMDb conversion failed).');
+        }
+    }
     console.log(`[SRT Endpoint] Subtitle file request. Video ID: ${videoId}, Lang: ${language}, Hash: ${hash}, Test: ${test}, Fallback: ${fallback}, Source: ${source}, Progressive: ${progressive}, Processing: ${processing}`);
+
+    // ...existing code...
 
     // Handle AI processing request
     if (processing === 'true' && source === 'ai') {
         console.log(`[SRT Endpoint] AI processing request for ${videoId}, checking status...`);
-        
         // Check if AI enhancement is complete
         const enhancedSubtitle = await waitForEnhancedSubtitle(videoId, hash, language, 1000);
         if (enhancedSubtitle) {
@@ -610,13 +672,11 @@ Video: ${videoId}
     if (progressive === 'true' && source) {
         const baseSource = source.replace('-ai', ''); // Remove -ai suffix to get base source
         console.log(`[SRT Endpoint] Progressive request for ${baseSource}, checking AI enhancement status...`);
-        
         const progressiveContent = getProgressiveSubtitleContent(videoId, baseSource);
         if (progressiveContent) {
             const enhancementKey = `${videoId}-${baseSource}-ai`;
             const aiStatus = aiEnhancementStatus.get(enhancementKey);
             const isAiEnhanced = aiStatus === 'completed';
-            
             console.log(`[SRT Endpoint] Serving ${isAiEnhanced ? 'AI-enhanced' : 'original'} progressive subtitle for ${baseSource} (AI status: ${aiStatus})`);
             res.setHeader('Content-Type', 'text/plain; charset=utf-8');
             res.setHeader('Content-Disposition', `attachment; filename="${videoId}_${language}_${isAiEnhanced ? 'ai' : 'original'}.srt"`);
@@ -629,29 +689,27 @@ Video: ${videoId}
         }
     }
 
-    // ...existing code...
-
-        // If we have a specific source, serve the cached content
-        if (source && (source === 'subdl' || source === 'podnapisi' || source === 'opensubtitles' || 
-                       source === 'subdl-original' || source === 'podnapisi-original' || source === 'opensubtitles-original' || 
-                       source === 'subdl-error' || source === 'subdl-hash' || source === 'subdl-ai' || 
-                       source === 'podnapisi-ai' || source === 'podnapisi-hash' || 
-                       source === 'opensubtitles-ai' || source === 'opensubtitles-hash')) {
-            const cachedContent = getCachedSubtitleContent(videoId, source);
-            if (cachedContent) {
-                console.log(`[SRT Endpoint] Serving cached ${source} subtitle for ${videoId}`);
-                res.setHeader('Content-Type', 'text/plain; charset=utf-8');
-                res.setHeader('Content-Disposition', `attachment; filename="${videoId}_${language}_${source}.srt"`);
-                res.send(cachedContent);
-                return;
-            } else {
-                console.log(`[SRT Endpoint] No cached content found for ${videoId} from ${source}`);
-            }
+    // If we have a specific source, serve the cached content
+    if (source && (source === 'subdl' || source === 'podnapisi' || source === 'opensubtitles' || 
+                   source === 'subdl-original' || source === 'podnapisi-original' || source === 'opensubtitles-original' || 
+                   source === 'subdl-error' || source === 'subdl-hash' || source === 'subdl-ai' || 
+                   source === 'podnapisi-ai' || source === 'podnapisi-hash' || 
+                   source === 'opensubtitles-ai' || source === 'opensubtitles-hash')) {
+        const cachedContent = getCachedSubtitleContent(videoId, source);
+        if (cachedContent) {
+            console.log(`[SRT Endpoint] Serving cached ${source} subtitle for ${videoId}`);
+            res.setHeader('Content-Type', 'text/plain; charset=utf-8');
+            res.setHeader('Content-Disposition', `attachment; filename="${videoId}_${language}_${source}.srt"`);
+            res.send(cachedContent);
+            return;
+        } else {
+            console.log(`[SRT Endpoint] No cached content found for ${videoId} from ${source}`);
         }
+    }
 
-        // If in test mode (no API keys), return a sample subtitle
-        if (test === 'true') {
-            const testSubtitle = `1
+    // If in test mode (no API keys), return a sample subtitle
+    if (test === 'true') {
+        const testSubtitle = `1
 00:00:01,000 --> 00:00:05,000
 Test Turkish subtitle for debugging
 
@@ -663,15 +721,15 @@ API Keys not configured - this is a test subtitle
 00:00:11,000 --> 00:00:15,000
 VideoId: ${videoId}
 `;
-            res.setHeader('Content-Type', 'text/plain; charset=utf-8');
-            res.setHeader('Content-Disposition', `attachment; filename="${videoId}_${language}.srt"`);
-            res.send(testSubtitle);
-            return;
-        }
+        res.setHeader('Content-Type', 'text/plain; charset=utf-8');
+        res.setHeader('Content-Disposition', `attachment; filename="${videoId}_${language}.srt"`);
+        res.send(testSubtitle);
+        return;
+    }
 
-        // If fallback mode, provide a basic subtitle
-        if (fallback === 'true' || fallback === 'traditional') {
-            const fallbackSubtitle = `1
+    // If fallback mode, provide a basic subtitle
+    if (fallback === 'true' || fallback === 'traditional') {
+        const fallbackSubtitle = `1
 00:00:01,000 --> 00:00:05,000
 Turkish subtitle loading...
 
@@ -687,16 +745,15 @@ Searching external subtitle sources...
 00:00:16,000 --> 00:00:20,000
 Please wait while we find subtitles
 `;
-            res.setHeader('Content-Type', 'text/plain; charset=utf-8');
-            res.setHeader('Content-Disposition', `attachment; filename="${videoId}_${language}.srt"`);
-            res.send(fallbackSubtitle);
-            return;
-        }
+        res.setHeader('Content-Type', 'text/plain; charset=utf-8');
+        res.setHeader('Content-Disposition', `attachment; filename="${videoId}_${language}.srt"`);
+        res.send(fallbackSubtitle);
+        return;
+    }
 
     // The logic for fetching and correcting subtitles should be handled by the main subtitle handler,
     // which calls getSubtitleUrlsForStremio. This endpoint should only serve cached content.
     // The incorrect call to getAICorrectedSubtitle has been removed.
-    
     console.error(`[SRT Endpoint] No cached subtitle found for ${videoId} and no fallback requested.`);
     res.status(404).send('Subtitle not found.');
 });
