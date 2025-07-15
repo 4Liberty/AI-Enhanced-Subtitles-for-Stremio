@@ -1,3 +1,41 @@
+// Robust handler for Stremio subtitle requests (JSON API)
+app.get('/subtitles/movie/:id/:params.json', async (req, res) => {
+    try {
+        const { id, params } = req.params;
+        // Parse extra info from params (filename, videoSize, etc.)
+        const extra = {};
+        if (params) {
+            // Example: filename=The Matrix (1999) 2160p UHD ... &videoSize=21324512625
+            const paramPairs = params.split('&');
+            for (const pair of paramPairs) {
+                const [key, value] = pair.split('=');
+                if (key && value) extra[key] = decodeURIComponent(value);
+            }
+        }
+        // Accept language from query or default to 'tr'
+        const language = req.query.language || 'tr';
+        // Use TMDB/IMDB ID normalization if needed
+        let imdbId = id;
+        if (imdbId.startsWith('tt')) {
+            // already IMDB
+        } else if (imdbId.startsWith('tmdb:')) {
+            imdbId = imdbId.replace('tmdb:', '');
+        }
+        // Call advanced subtitle logic
+        const subtitles = await getSubtitleUrlsForStremio(imdbId, 'movie', extra.season, extra.episode, language, extra.infoHash || null);
+        // Absolutize URLs for Stremio
+        const base = req.protocol + '://' + req.get('host');
+        const result = subtitles.map(sub => {
+            let url = sub.url;
+            if (url && url.startsWith('/')) url = base + url;
+            return { ...sub, url };
+        });
+        res.json({ subtitles: result });
+    } catch (error) {
+        console.error('[Subtitles JSON Handler] Error:', error);
+        res.status(500).json({ subtitles: [], error: error.message });
+    }
+});
 // server.js
 // --- MERGED & ENHANCED VERSION v2.9.2 ---
 
