@@ -1550,14 +1550,33 @@ function setupAutomaticUpdates() {
     console.log('Automatic updates configured');
 }
 
-document.addEventListener('DOMContentLoaded', initializeUI);
-
-// Fallback initialization if DOMContentLoaded already fired
-if (document.readyState === 'loading') {
-    // DOMContentLoaded has not fired yet
-    console.log('DOM is still loading...');
-} else {
-    // DOM is already loaded
-    console.log('DOM already loaded - Initializing immediately...');
-    initializeUI();
-}
+// Simplified initialization - prevent multiple instances
+document.addEventListener('DOMContentLoaded', () => {
+    console.log('DOM loaded, initializing UI...');
+    
+    // Ensure the UI is only initialized once
+    if (!window.stremioUI) {
+        try {
+            window.stremioUI = new StremioAddonUI();
+            setupAutomaticUpdates();
+            console.log('UI initialized successfully');
+        } catch (error) {
+            console.error('Failed to initialize UI:', error);
+            
+            // Show basic error message
+            const errorDiv = document.createElement('div');
+            errorDiv.style.cssText = 'position: fixed; top: 10px; right: 10px; background: #ff4444; color: white; padding: 10px; border-radius: 5px; z-index: 1000;';
+            errorDiv.textContent = 'UI initialization failed - please refresh the page';
+            document.body.appendChild(errorDiv);
+            
+            // Auto-hide after 5 seconds
+            setTimeout(() => {
+                if (errorDiv.parentNode) {
+                    errorDiv.parentNode.removeChild(errorDiv);
+                }
+            }, 5000);
+        }
+    } else {
+        console.log('UI already initialized, skipping...');
+    }
+});
