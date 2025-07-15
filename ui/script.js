@@ -1,4 +1,4 @@
-// Modern UI JavaScript for Stremio Addon Control Panel
+// Enhanced UI JavaScript for Stremio Addon Control Panel - Merged Version
 class StremioAddonUI {
     constructor() {
         this.currentTab = 'dashboard';
@@ -15,6 +15,7 @@ class StremioAddonUI {
         this.refreshInterval = null;
         this.performanceInterval = null;
         this.chartInstances = {};
+        this.isInitialized = false;
         
         // Progressive AI Enhancement System
         this.progressiveEnhancementEnabled = true;
@@ -42,6 +43,11 @@ class StremioAddonUI {
 
     initializeAfterDOM() {
         try {
+            if (this.isInitialized) {
+                console.log('UI already initialized, skipping...');
+                return;
+            }
+
             // Setup event listeners first
             this.setupEventListeners();
             
@@ -68,6 +74,7 @@ class StremioAddonUI {
                 console.error('Chart initialization failed:', error);
             });
             
+            this.isInitialized = true;
             console.log('Enhanced Stremio Addon UI initialization complete');
             
         } catch (error) {
@@ -147,6 +154,13 @@ class StremioAddonUI {
                 this.copyAddonUrl();
             });
         }
+        // Test buttons
+        document.querySelectorAll('[data-test]').forEach(button => {
+            button.addEventListener('click', (e) => {
+                const testType = e.target.dataset.test;
+                this.runTest(testType);
+            });
+        });
         
         console.log('Event listeners setup complete');
     }
@@ -346,15 +360,41 @@ class StremioAddonUI {
                         subtitlesProcessed: 0,
                         torrentsFound: 0,
                         activeProviders: Object.values(healthData.services || {}).filter(Boolean).length,
-                        uptime: 0
+                        uptime: 0,
+                        performance: {
+                            responseTime: 0,
+                            successRate: 0,
+                            memoryUsage: 0,
+                            activeConnections: 0
+                        }
                     };
                 }
-                throw new Error(`Dashboard API failed: ${response.status}`);
+                // Return fallback data instead of null
+                return {
+                    subtitlesProcessed: 0,
+                    torrentsFound: 0,
+                    activeProviders: 0,
+                    uptime: 0,
+                    memoryUsage: 0,
+                    successRate: 0,
+                    status: 'warning',
+                    message: 'API not responding'
+                };
             }
             return await response.json();
         } catch (error) {
             console.error('Failed to fetch dashboard data:', error);
-            return null;
+            // Return fallback data instead of null
+            return {
+                subtitlesProcessed: 0,
+                torrentsFound: 0,
+                activeProviders: 0,
+                uptime: 0,
+                memoryUsage: 0,
+                successRate: 0,
+                status: 'error',
+                message: 'Failed to fetch data'
+            };
         }
     }
 
@@ -1249,26 +1289,41 @@ class StremioAddonUI {
         this.addToActivityLog(message, type);
     }
 
-    getNotificationIcon(type) {
-        switch (type) {
-            case 'success': return 'fa-check-circle';
-            case 'error': return 'fa-exclamation-circle';
-            case 'warning': return 'fa-exclamation-triangle';
-            case 'info':
-            default: return 'fa-info-circle';
-        }
-    }
-
-    // Addon installation functions
-    installAddon() {
-        const manifestUrl = `${window.location.origin}/manifest.json`;
-        const stremioUrl = `stremio://${manifestUrl}`;
-        
+    // Enhanced notification system with fallback
+    showSafeNotification(message, type = 'info') {
         try {
-            window.open(stremioUrl, '_blank');
-            this.showNotification('Opening Stremio to install addon...', 'info');
+            console.log(`[${type.toUpperCase()}] ${message}`);
+            
+            // Try to show visual notification if notification container exists
+            const container = document.getElementById('notification-container') || document.body;
+            
+            const notification = document.createElement('div');
+            notification.className = `notification notification-${type}`;
+            notification.innerHTML = `
+                <div class="notification-content">
+                    <i class="fas ${this.getNotificationIcon(type)}"></i>
+                    <span>${message}</span>
+                    <button class="notification-close" onclick="this.parentElement.parentElement.remove()">
+                        <i class="fas fa-times"></i>
+                    </button>
+                </div>
+            `;
+            
+            container.appendChild(notification);
+            
+            // Auto-remove after 5 seconds
+            setTimeout(() => {
+                if (notification.parentNode) {
+                    notification.parentNode.removeChild(notification);
+                }
+            }, 5000);
+            
+            // Add to activity log
+            this.addToActivityLog(message, type);
         } catch (error) {
-            this.showNotification('Failed to open Stremio. Please copy the manifest URL manually.', 'error');
+            console.error('Error showing notification:', error);
+            // Fallback to console log
+            console.log(`NOTIFICATION [${type}]: ${message}`);
         }
     }
 
