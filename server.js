@@ -32,51 +32,317 @@ const tmdbToImdb = async (tmdbId) => {
     }
 };
 
-// Robust handler for Stremio subtitle requests (JSON API)
+// Enhanced robust handler for Stremio subtitle requests (JSON API)
 app.get('/subtitles/movie/:id/:params.json', async (req, res) => {
+    const startTime = Date.now();
+    const requestId = Math.random().toString(36).substring(2, 15);
+    
     try {
+        console.log(`[${requestId}] Subtitle request received for movie: ${req.params.id}`);
+        
         const { id, params } = req.params;
-        // Parse extra info from params (filename, videoSize, etc.)
+        
+        // Enhanced parameter parsing with better error handling
         const extra = {};
-        if (params) {
-            const paramPairs = params.split('&');
-            for (const pair of paramPairs) {
-                const [key, value] = pair.split('=');
-                if (key && value) extra[key] = decodeURIComponent(value);
+        if (params && typeof params === 'string') {
+            try {
+                // First decode the entire params string
+                const decodedParams = decodeURIComponent(params);
+                const paramPairs = decodedParams.split('&');
+                
+                for (const pair of paramPairs) {
+                    const [key, value] = pair.split('=');
+                    if (key && value !== undefined) {
+                        // Double decode values to handle nested encoding
+                        try {
+                            extra[key] = decodeURIComponent(value);
+                        } catch (decodeError) {
+                            console.warn(`[${requestId}] Could not decode parameter ${key}=${value}:`, decodeError.message);
+                            extra[key] = value; // Use original value if decoding fails
+                        }
+                    }
+                }
+                console.log(`[${requestId}] Parsed parameters:`, extra);
+            } catch (parseError) {
+                console.warn(`[${requestId}] Parameter parsing failed:`, parseError.message);
+                // Continue with empty extra object
             }
         }
-        // Accept language from query or default to 'tr'
-        const language = req.query.language || 'tr';
-        // Normalize ID: convert TMDB to IMDb if needed
-        let imdbId = id;
-        if (imdbId.startsWith('tt')) {
-            // already IMDB
-        } else if (imdbId.startsWith('tmdb:')) {
+        
+        // Validate and sanitize language parameter
+        const language = validateLanguage(req.query.language) || 'tr';
+        
+        // Enhanced ID validation and conversion
+        let imdbId = validateAndNormalizeId(id);
+        if (!imdbId) {
+            console.warn(`[${requestId}] Invalid ID format: ${id}`);
+            return res.status(400).json({ 
+                subtitles: [], 
+                error: 'Invalid ID format. Expected IMDb ID (tt1234567) or TMDB ID (tmdb:1234567)' 
+            });
+        }
+        
+        // Handle TMDB to IMDb conversion with better error handling
+        if (imdbId.startsWith('tmdb:')) {
             const tmdbNum = imdbId.replace('tmdb:', '');
+            console.log(`[${requestId}] Converting TMDB ID ${tmdbNum} to IMDb`);
+            
             const converted = await tmdbToImdb(tmdbNum);
             if (converted) {
                 imdbId = converted;
+                console.log(`[${requestId}] Successfully converted to IMDb: ${imdbId}`);
             } else {
-                // If conversion fails, gracefully return no subtitles
-                console.warn(`[Subtitles JSON Handler] Could not convert TMDB:${tmdbNum} to IMDb.`);
-                return res.json({ subtitles: [], error: 'Could not convert TMDB to IMDb. Please check TMDB ID or API key.' });
+                console.warn(`[${requestId}] Could not convert TMDB:${tmdbNum} to IMDb`);
+                return res.status(404).json({ 
+                    subtitles: [], 
+                    error: 'Could not convert TMDB to IMDb. Please check TMDB ID or API key configuration.' 
+                });
             }
         }
-        // Call advanced subtitle logic
-        const subtitles = await getSubtitleUrlsForStremio(imdbId, 'movie', extra.season, extra.episode, language, extra.infoHash || null);
-        // Absolutize URLs for Stremio
+        
+        // Call advanced subtitle logic with timeout protection
+        const subtitlePromise = getSubtitleUrlsForStremio(
+            imdbId, 
+            'movie', 
+            extra.season, 
+            extra.episode, 
+            language, 
+            extra.infoHash || null
+        );
+        
+        // Add request timeout (30 seconds)
+        const timeoutPromise = new Promise((_, reject) => {
+            setTimeout(() => reject(new Error('Request timeout after 30 seconds')), 30000);
+        });
+        
+        const subtitles = await Promise.race([subtitlePromise, timeoutPromise]);
+        
+        // Process and enhance subtitle URLs
         const base = req.protocol + '://' + req.get('host');
         const result = subtitles.map(sub => {
             let url = sub.url;
-            if (url && url.startsWith('/')) url = base + url;
+            if (url && url.startsWith('/')) {
+                url = base + url;
+            }
             return { ...sub, url };
         });
-        res.json({ subtitles: result });
+        
+        const processingTime = Date.now() - startTime;
+        console.log(`[${requestId}] Subtitle request completed in ${processingTime}ms, found ${result.length} subtitles`);
+        
+        res.json({ 
+            subtitles: result,
+            meta: {
+                requestId,
+                processingTime,
+                totalFound: result.length,
+                language,
+                imdbId
+            }
+        });
+        
     } catch (error) {
-        console.error('[Subtitles JSON Handler] Error:', error);
-        res.status(500).json({ subtitles: [], error: error.message });
+        const processingTime = Date.now() - startTime;
+        console.error(`[${requestId}] Subtitle request failed after ${processingTime}ms:`, error);
+        
+        // Determine appropriate error status
+        let statusCode = 500;
+        if (error.message.includes('timeout')) statusCode = 504;
+        if (error.message.includes('Invalid')) statusCode = 400;
+        if (error.message.includes('not found')) statusCode = 404;
+        
+        res.status(statusCode).json({ 
+            subtitles: [], 
+            error: error.message,
+            meta: {
+                requestId,
+                processingTime,
+                errorType: error.constructor.name
+            }
+        });
     }
 });
+
+// Enhanced TV series subtitle handler
+app.get('/subtitles/series/:id/:params.json', async (req, res) => {
+    const startTime = Date.now();
+    const requestId = Math.random().toString(36).substring(2, 15);
+    
+    try {
+        console.log(`[${requestId}] Subtitle request received for series: ${req.params.id}`);
+        
+        const { id, params } = req.params;
+        
+        // Enhanced parameter parsing
+        const extra = {};
+        if (params && typeof params === 'string') {
+            try {
+                const decodedParams = decodeURIComponent(params);
+                const paramPairs = decodedParams.split('&');
+                
+                for (const pair of paramPairs) {
+                    const [key, value] = pair.split('=');
+                    if (key && value !== undefined) {
+                        try {
+                            extra[key] = decodeURIComponent(value);
+                        } catch (decodeError) {
+                            console.warn(`[${requestId}] Could not decode parameter ${key}=${value}:`, decodeError.message);
+                            extra[key] = value;
+                        }
+                    }
+                }
+                console.log(`[${requestId}] Parsed parameters:`, extra);
+            } catch (parseError) {
+                console.warn(`[${requestId}] Parameter parsing failed:`, parseError.message);
+            }
+        }
+        
+        // Validate season and episode for series
+        const season = validateNumber(extra.season, 'season');
+        const episode = validateNumber(extra.episode, 'episode');
+        
+        if (!season || !episode) {
+            console.warn(`[${requestId}] Invalid season/episode: ${extra.season}/${extra.episode}`);
+            return res.status(400).json({ 
+                subtitles: [], 
+                error: 'Invalid season or episode number for series request' 
+            });
+        }
+        
+        const language = validateLanguage(req.query.language) || 'tr';
+        
+        // Enhanced ID validation and conversion
+        let imdbId = validateAndNormalizeId(id);
+        if (!imdbId) {
+            console.warn(`[${requestId}] Invalid ID format: ${id}`);
+            return res.status(400).json({ 
+                subtitles: [], 
+                error: 'Invalid ID format. Expected IMDb ID (tt1234567) or TMDB ID (tmdb:1234567)' 
+            });
+        }
+        
+        // Handle TMDB to IMDb conversion
+        if (imdbId.startsWith('tmdb:')) {
+            const tmdbNum = imdbId.replace('tmdb:', '');
+            console.log(`[${requestId}] Converting TMDB ID ${tmdbNum} to IMDb`);
+            
+            const converted = await tmdbToImdb(tmdbNum);
+            if (converted) {
+                imdbId = converted;
+                console.log(`[${requestId}] Successfully converted to IMDb: ${imdbId}`);
+            } else {
+                console.warn(`[${requestId}] Could not convert TMDB:${tmdbNum} to IMDb`);
+                return res.status(404).json({ 
+                    subtitles: [], 
+                    error: 'Could not convert TMDB to IMDb. Please check TMDB ID or API key configuration.' 
+                });
+            }
+        }
+        
+        // Call advanced subtitle logic with timeout protection
+        const subtitlePromise = getSubtitleUrlsForStremio(
+            imdbId, 
+            'series', 
+            season, 
+            episode, 
+            language, 
+            extra.infoHash || null
+        );
+        
+        const timeoutPromise = new Promise((_, reject) => {
+            setTimeout(() => reject(new Error('Request timeout after 30 seconds')), 30000);
+        });
+        
+        const subtitles = await Promise.race([subtitlePromise, timeoutPromise]);
+        
+        // Process and enhance subtitle URLs
+        const base = req.protocol + '://' + req.get('host');
+        const result = subtitles.map(sub => {
+            let url = sub.url;
+            if (url && url.startsWith('/')) {
+                url = base + url;
+            }
+            return { ...sub, url };
+        });
+        
+        const processingTime = Date.now() - startTime;
+        console.log(`[${requestId}] Series subtitle request completed in ${processingTime}ms, found ${result.length} subtitles`);
+        
+        res.json({ 
+            subtitles: result,
+            meta: {
+                requestId,
+                processingTime,
+                totalFound: result.length,
+                language,
+                imdbId,
+                season,
+                episode
+            }
+        });
+        
+    } catch (error) {
+        const processingTime = Date.now() - startTime;
+        console.error(`[${requestId}] Series subtitle request failed after ${processingTime}ms:`, error);
+        
+        // Determine appropriate error status
+        let statusCode = 500;
+        if (error.message.includes('timeout')) statusCode = 504;
+        if (error.message.includes('Invalid')) statusCode = 400;
+        if (error.message.includes('not found')) statusCode = 404;
+        
+        res.status(statusCode).json({ 
+            subtitles: [], 
+            error: error.message,
+            meta: {
+                requestId,
+                processingTime,
+                errorType: error.constructor.name
+            }
+        });
+    }
+});
+
+// Utility functions for enhanced validation
+function validateLanguage(lang) {
+    if (!lang || typeof lang !== 'string') return null;
+    
+    // Common language codes
+    const supportedLanguages = ['tr', 'en', 'es', 'fr', 'de', 'it', 'ru', 'pt', 'ar', 'zh'];
+    const normalized = lang.toLowerCase().trim();
+    
+    return supportedLanguages.includes(normalized) ? normalized : null;
+}
+
+function validateAndNormalizeId(id) {
+    if (!id || typeof id !== 'string') return null;
+    
+    const trimmed = id.trim();
+    
+    // Valid IMDb ID format
+    if (/^tt\d{7,}$/.test(trimmed)) {
+        return trimmed;
+    }
+    
+    // Valid TMDB ID format
+    if (/^tmdb:\d+$/.test(trimmed)) {
+        return trimmed;
+    }
+    
+    return null;
+}
+
+function validateNumber(value, type) {
+    if (!value) return null;
+    
+    const num = parseInt(value, 10);
+    if (isNaN(num) || num < 1) {
+        console.warn(`Invalid ${type} number: ${value}`);
+        return null;
+    }
+    
+    return num;
+}
 // server.js
 // --- MERGED & ENHANCED VERSION v2.9.2 ---
 
@@ -89,6 +355,10 @@ const {
     getCachedSubtitleContent,
     getProgressiveSubtitleContent,
     getAiEnhancementStatus,
+    tmdbToImdb,
+    robustFetch,
+    getCache,
+    setCache,
     // New AI processing functions
     initiateAIEnhancement,
     waitForEnhancedSubtitle,
