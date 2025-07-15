@@ -9,7 +9,13 @@ const {
     getAICorrectedSubtitleDirect,
     getCachedSubtitleContent,
     getProgressiveSubtitleContent,
-    getAiEnhancementStatus
+    getAiEnhancementStatus,
+    // New AI processing functions
+    initiateAIEnhancement,
+    waitForEnhancedSubtitle,
+    searchByHash,
+    findBestOriginalSubtitle,
+    downloadAndProcessSubtitle
 } = require('./lib/subtitleMatcher');
 const { streamEnricher } = require('./lib/streamEnricher');
 const { initializeStreamingProviders, streamingManager } = require('./lib/streamingProviderManager');
@@ -18,7 +24,7 @@ const { setupUIRoutes } = require('./ui-api');
 // Get the AI enhancement status map
 const aiEnhancementStatus = getAiEnhancementStatus();
 
-console.log("Starting Stremio AI Subtitle Addon v2.9.1 with Beautiful UI...");
+console.log("Starting Stremio AI Subtitle Addon v2.10.0 - Progressive AI Enhancement System...");
 
 // Initialize Express app
 const app = express();
@@ -232,59 +238,28 @@ const subtitleHandler = async (args) => {
     const language = 'tr';
     const imdbId = args.id;
 
-    // 1. Try hash-matched subtitles first
+    // 1. Try hash-matched subtitles first for perfect sync
     if (infoHash) {
-        const hashSubs = await getSubtitleUrlsForStremio(imdbId, type, season, episode, language, infoHash);
+        console.log(`[Handler] Searching for hash-matched subtitles for ${imdbId} with hash ${infoHash}`);
+        const hashSubs = await searchByHash(infoHash, language);
         if (hashSubs && hashSubs.length > 0) {
             console.log(`[Handler] Found hash-matched subtitle for ${imdbId}`);
             return { subtitles: [hashSubs[0]] };
         }
     }
 
-    // 2. No hash match, try to get AI-enhanced subtitle (wait up to 15 seconds)
-    const AI_WAIT_TIMEOUT = 15000;
-    let aiSubtitle = null;
-    let aiError = null;
-    const aiPromise = (async () => {
-        try {
-            // Get best original subtitle
-            const originals = await getSubtitleUrlsForStremio(imdbId, type, season, episode, language);
-            if (originals && originals.length > 0) {
-                const originalContent = await downloadAndProcessSubtitle(originals[0].url, imdbId, originals[0].name);
-                if (originalContent) {
-                    const enhancedContent = await getAICorrectedSubtitleDirect(originalContent, { primaryLanguage: language });
-                    if (enhancedContent && enhancedContent.length > 10) {
-                        aiSubtitle = [{
-                            id: `ai-enhanced-${imdbId}`,
-                            lang: language,
-                            url: `data:text/plain;charset=utf-8,${encodeURIComponent(enhancedContent)}`,
-                            name: 'Turkish (AI Enhanced)'
-                        }];
-                    }
-                }
-            }
-        } catch (err) {
-            aiError = err;
-        }
-    })();
-    // Wait for AI or timeout
-    await Promise.race([
-        aiPromise,
-        new Promise(resolve => setTimeout(resolve, AI_WAIT_TIMEOUT))
-    ]);
-    if (aiSubtitle) {
-        console.log(`[Handler] Serving AI-enhanced subtitle for ${imdbId}`);
-        return { subtitles: aiSubtitle };
+    // 2. Get original subtitles and initiate AI enhancement
+    const originalSubs = await findBestOriginalSubtitle(imdbId, season, episode, language);
+    
+    if (originalSubs && originalSubs.length > 0) {
+        // Start AI enhancement in background
+        initiateAIEnhancement(imdbId, infoHash, season, episode, language, originalSubs);
+        
+        // Return original subtitle immediately
+        console.log(`[Handler] Serving original subtitle for ${imdbId} (AI enhancement started in background)`);
+        return { subtitles: [originalSubs[0]] };
     }
-    if (aiError) {
-        console.warn(`[Handler] AI enhancement error:`, aiError);
-    }
-    // 3. Fallback to best original
-    const originals = await getSubtitleUrlsForStremio(imdbId, type, season, episode, language);
-    if (originals && originals.length > 0) {
-        console.log(`[Handler] Serving best original subtitle for ${imdbId}`);
-        return { subtitles: [originals[0]] };
-    }
+    
     console.log(`[Handler] No subtitles found for ${imdbId}`);
     return { subtitles: [] };
 };
@@ -602,82 +577,38 @@ Please wait while we find subtitles
     res.status(404).send('Subtitle not found.');
 });
 
-// Subtitles resource endpoints that Stremio expects
-app.post('/subtitles/:type/:id', async (req, res) => {
-    const { type, id } = req.params;
-    console.log(`[Express] POST /subtitles/${type}/${id} - Body:`, JSON.stringify(req.body, null, 2));
+// Enhanced subtitle status endpoint
+app.get('/subtitles/:imdbId/:hash/enhanced', async (req, res) => {
     try {
-        const args = { type, id, extra: req.body?.extra || {} };
-        const result = await subtitleHandler(args);
-        const absolutizedResult = absolutizeSubtitleUrls(result, req);
-        console.log(`[Express] POST result:`, JSON.stringify(absolutizedResult, null, 2));
-        res.json(absolutizedResult);
-    } catch (err) {
-        console.error('[Express] Error in subtitles POST endpoint:', err);
-        res.status(500).json({ subtitles: [] });
-    }
-});
-
-app.get('/subtitles/:type/:id', async (req, res) => {
-    const { type, id } = req.params;
-    console.log(`[Express] GET /subtitles/${type}/${id} - Query:`, JSON.stringify(req.query, null, 2));
-    try {
-        const args = { type, id, extra: req.query || {} };
-        const result = await subtitleHandler(args);
-        const absolutizedResult = absolutizeSubtitleUrls(result, req);
-        console.log(`[Express] GET result:`, JSON.stringify(absolutizedResult, null, 2));
-        res.json(absolutizedResult);
-    } catch (err) {
-        console.error('[Express] Error in subtitles GET endpoint:', err);
-        res.status(500).json({ subtitles: [] });
-    }
-});
-
-// Support for .json extension
-app.get('/subtitles/:type/:id.json', async (req, res) => {
-    const { type, id } = req.params;
-    console.log(`[Express] GET /subtitles/${type}/${id}.json - Query:`, JSON.stringify(req.query, null, 2));
-    try {
-        const args = { type, id, extra: req.query || {} };
-        const result = await subtitleHandler(args);
-        const absolutizedResult = absolutizeSubtitleUrls(result, req);
-        console.log(`[Express] .json result:`, JSON.stringify(absolutizedResult, null, 2));
-        res.json(absolutizedResult);
-    } catch (err) {
-        console.error('[Express] Error in subtitles .json endpoint:', err);
-        res.status(500).json({ subtitles: [] });
-    }
-});
-
-// Support for subtitles with filename parameter (from Stremio logs)
-app.get('/subtitles/:type/:id/:filename', async (req, res) => {
-    const { type, id, filename } = req.params;
-    console.log(`[Express] GET /subtitles/${type}/${id}/${filename} - Query:`, JSON.stringify(req.query, null, 2));
-    try {
-        const args = { type, id, extra: req.query || {} };
-        const result = await subtitleHandler(args);
-        const absolutizedResult = absolutizeSubtitleUrls(result, req);
-        console.log(`[Express] Filename result:`, JSON.stringify(absolutizedResult, null, 2));
-        res.json(absolutizedResult);
-    } catch (err) {
-        console.error('[Express] Error in subtitles filename endpoint:', err);
-        res.status(500).json({ subtitles: [] });
-    }
-});
-
-// Support for subtitles with filename parameter and .json extension
-app.get('/subtitles/:type/:id/:filename.json', async (req, res) => {
-    const { type, id, filename } = req.params;
-    console.log(`[Express] GET /subtitles/${type}/${id}/${filename}.json - Query:`, JSON.stringify(req.query, null, 2));
-    try {
-        const args = { type, id, extra: req.query || {} };
-        const result = await subtitleHandler(args);
-        const absolutizedResult = absolutizeSubtitleUrls(result, req);
-        console.log(`[Express] Filename.json result:`, JSON.stringify(absolutizedResult, null, 2));
-        res.json(absolutizedResult);
-    } catch (err) {
-        console.error('[Express] Error in subtitles filename.json endpoint:', err);
-        res.status(500).json({ subtitles: [] });
+        const { imdbId, hash } = req.params;
+        const language = req.query.language || 'tr';
+        
+        console.log(`[Enhanced Check] Checking enhanced subtitle for ${imdbId} with hash ${hash}`);
+        
+        // Check if enhanced subtitle is ready
+        const enhancedSubtitle = await waitForEnhancedSubtitle(imdbId, hash, language, 1000); // 1 second timeout
+        
+        if (enhancedSubtitle) {
+            res.json({
+                success: true,
+                ready: true,
+                subtitle: enhancedSubtitle,
+                message: 'Enhanced subtitle is ready'
+            });
+        } else {
+            res.json({
+                success: true,
+                ready: false,
+                message: 'Enhanced subtitle is still processing'
+            });
+        }
+    } catch (error) {
+        console.error('Error checking enhanced subtitle:', error);
+        res.status(500).json({
+            success: false,
+            ready: false,
+            error: error.message
+        });
     }
 });
 

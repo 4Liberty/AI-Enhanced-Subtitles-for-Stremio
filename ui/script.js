@@ -16,6 +16,11 @@ class StremioAddonUI {
         this.performanceInterval = null;
         this.chartInstances = {};
         
+        // Progressive AI Enhancement System
+        this.progressiveEnhancementEnabled = true;
+        this.enhancementCheckInterval = 5000; // Check every 5 seconds
+        this.activeEnhancementChecks = new Map();
+        
         this.init();
     }
 
@@ -1314,6 +1319,89 @@ class StremioAddonUI {
         
         document.body.removeChild(textArea);
     }
+
+    // Progressive AI Enhancement Functions
+    startProgressiveEnhancement(imdbId, hash, language = 'tr') {
+        if (!this.progressiveEnhancementEnabled) return;
+        
+        const enhancementKey = `${imdbId}-${hash}`;
+        
+        // Don't start multiple checks for same content
+        if (this.activeEnhancementChecks.has(enhancementKey)) {
+            return;
+        }
+        
+        console.log(`[UI] Starting progressive enhancement check for ${imdbId}`);
+        
+        const checkInterval = setInterval(async () => {
+            try {
+                const response = await fetch(`/subtitles/${imdbId}/${hash}/enhanced?language=${language}`);
+                const result = await response.json();
+                
+                if (result.success && result.ready) {
+                    console.log(`[UI] Enhanced subtitle ready for ${imdbId}`);
+                    this.notifyEnhancementReady(imdbId, result.subtitle);
+                    this.stopProgressiveEnhancement(enhancementKey);
+                }
+            } catch (error) {
+                console.error(`[UI] Error checking enhancement status:`, error);
+            }
+        }, this.enhancementCheckInterval);
+        
+        this.activeEnhancementChecks.set(enhancementKey, checkInterval);
+        
+        // Auto-stop after 2 minutes
+        setTimeout(() => {
+            this.stopProgressiveEnhancement(enhancementKey);
+        }, 120000);
+    }
+    
+    stopProgressiveEnhancement(enhancementKey) {
+        const interval = this.activeEnhancementChecks.get(enhancementKey);
+        if (interval) {
+            clearInterval(interval);
+            this.activeEnhancementChecks.delete(enhancementKey);
+            console.log(`[UI] Stopped progressive enhancement check for ${enhancementKey}`);
+        }
+    }
+    
+    notifyEnhancementReady(imdbId, subtitle) {
+        this.showNotification(
+            `🤖 AI-Enhanced Subtitle Ready for ${imdbId}`,
+            'The AI has improved your subtitle quality. It will automatically switch to the enhanced version.',
+            'success'
+        );
+    }
+
+    // Enhanced subtitle download with progressive enhancement
+    async downloadSubtitleWithEnhancement(url, imdbId, hash, language = 'tr') {
+        try {
+            // Start progressive enhancement check
+            this.startProgressiveEnhancement(imdbId, hash, language);
+            
+            // Download original subtitle
+            const response = await fetch(url);
+            const content = await response.text();
+            
+            this.showNotification(
+                `✅ Subtitle Downloaded`,
+                `Original subtitle loaded. AI enhancement is processing in background...`,
+                'info'
+            );
+            
+            return content;
+        } catch (error) {
+            console.error('Error downloading subtitle:', error);
+            this.showNotification(
+                `❌ Download Failed`,
+                `Failed to download subtitle: ${error.message}`,
+                'error'
+            );
+            return null;
+        }
+    }
+
+    // ...existing code...
 }
 
 // Global error handling
