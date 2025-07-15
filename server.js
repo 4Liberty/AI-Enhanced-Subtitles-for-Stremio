@@ -24,7 +24,7 @@ const { setupUIRoutes } = require('./ui-api');
 // Get the AI enhancement status map
 const aiEnhancementStatus = getAiEnhancementStatus();
 
-console.log("Starting Stremio AI Subtitle Addon v2.10.0 - Progressive AI Enhancement System...");
+console.log("Starting Stremio AI Subtitle Addon v2.10.1 - Realistic AI Enhancement with Multiple Options...");
 
 // Initialize Express app
 const app = express();
@@ -248,16 +248,44 @@ const subtitleHandler = async (args) => {
         }
     }
 
-    // 2. Get original subtitles and initiate AI enhancement
+    // 2. Get original subtitles and offer both original and AI-enhanced options
     const originalSubs = await findBestOriginalSubtitle(imdbId, season, episode, language);
     
     if (originalSubs && originalSubs.length > 0) {
-        // Start AI enhancement in background
-        initiateAIEnhancement(imdbId, infoHash, season, episode, language, originalSubs);
+        const subtitleOptions = [];
         
-        // Return original subtitle immediately
-        console.log(`[Handler] Serving original subtitle for ${imdbId} (AI enhancement started in background)`);
-        return { subtitles: [originalSubs[0]] };
+        // Add original subtitle first (for immediate use)
+        subtitleOptions.push({
+            id: `${imdbId}-original`,
+            lang: language,
+            url: originalSubs[0].url,
+            name: `Turkish (Original - ${originalSubs[0].name})`
+        });
+        
+        // Add AI-enhanced subtitle option (check if already processed)
+        const enhancedSubtitle = await waitForEnhancedSubtitle(imdbId, infoHash, language, 2000); // 2 second check
+        if (enhancedSubtitle) {
+            subtitleOptions.push({
+                id: `${imdbId}-ai-enhanced`,
+                lang: language,
+                url: enhancedSubtitle.url,
+                name: `Turkish (AI Enhanced - ${enhancedSubtitle.name})`
+            });
+        } else {
+            // Start AI enhancement in background for next request
+            initiateAIEnhancement(imdbId, infoHash, season, episode, language, originalSubs);
+            
+            // Add placeholder for AI-enhanced (will be available on next request)
+            subtitleOptions.push({
+                id: `${imdbId}-ai-processing`,
+                lang: language,
+                url: `/subtitles/${imdbId}/tr.srt?processing=true&source=ai`,
+                name: `Turkish (AI Enhanced - Processing...)`
+            });
+        }
+        
+        console.log(`[Handler] Serving ${subtitleOptions.length} subtitle options for ${imdbId}`);
+        return { subtitles: subtitleOptions };
     }
     
     console.log(`[Handler] No subtitles found for ${imdbId}`);
@@ -480,9 +508,46 @@ app.get('/manifest.json', (req, res) => {
 // IMPORTANT: .srt route MUST come before other subtitle routes to prevent conflicts
 app.get('/subtitles/:videoId/:language.srt', async (req, res) => {
     const { videoId, language } = req.params;
-    const { hash, test, fallback, source, progressive } = req.query;
+    const { hash, test, fallback, source, progressive, processing } = req.query;
     
-    console.log(`[SRT Endpoint] Subtitle file request. Video ID: ${videoId}, Lang: ${language}, Hash: ${hash}, Test: ${test}, Fallback: ${fallback}, Source: ${source}, Progressive: ${progressive}`);
+    console.log(`[SRT Endpoint] Subtitle file request. Video ID: ${videoId}, Lang: ${language}, Hash: ${hash}, Test: ${test}, Fallback: ${fallback}, Source: ${source}, Progressive: ${progressive}, Processing: ${processing}`);
+
+    // Handle AI processing request
+    if (processing === 'true' && source === 'ai') {
+        console.log(`[SRT Endpoint] AI processing request for ${videoId}, checking status...`);
+        
+        // Check if AI enhancement is complete
+        const enhancedSubtitle = await waitForEnhancedSubtitle(videoId, hash, language, 1000);
+        if (enhancedSubtitle) {
+            console.log(`[SRT Endpoint] AI enhancement complete, serving enhanced subtitle`);
+            res.setHeader('Content-Type', 'text/plain; charset=utf-8');
+            res.setHeader('Content-Disposition', `attachment; filename="${videoId}_${language}_ai_enhanced.srt"`);
+            res.setHeader('X-AI-Enhanced', 'true');
+            res.setHeader('X-AI-Status', 'completed');
+            res.send(enhancedSubtitle.content || enhancedSubtitle.url);
+            return;
+        } else {
+            console.log(`[SRT Endpoint] AI enhancement still processing, serving placeholder`);
+            const processingSubtitle = `1
+00:00:01,000 --> 00:00:05,000
+🤖 AI Enhancement in Progress...
+
+2
+00:00:06,000 --> 00:00:10,000
+Please refresh subtitles in a few moments for enhanced version
+
+3
+00:00:11,000 --> 00:00:15,000
+Video: ${videoId}
+`;
+            res.setHeader('Content-Type', 'text/plain; charset=utf-8');
+            res.setHeader('Content-Disposition', `attachment; filename="${videoId}_${language}_processing.srt"`);
+            res.setHeader('X-AI-Enhanced', 'false');
+            res.setHeader('X-AI-Status', 'processing');
+            res.send(processingSubtitle);
+            return;
+        }
+    }
 
     // Handle progressive AI-enhanced subtitles
     if (progressive === 'true' && source) {
@@ -506,6 +571,8 @@ app.get('/subtitles/:videoId/:language.srt', async (req, res) => {
             console.log(`[SRT Endpoint] No progressive content found for ${baseSource}, falling back to traditional method`);
         }
     }
+
+    // ...existing code...
 
     // If we have a specific source (subdl, podnapisi, opensubtitles), serve the cached content
     if (source && (source === 'subdl' || source === 'podnapisi' || source === 'opensubtitles' || 
