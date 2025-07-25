@@ -14,9 +14,6 @@
     "build": "npm run lint && npm test",
     "docker:build": "docker build -t vlsub-addon .",
     "docker:run": "docker run -p 7000:7000 vlsub-addon",
-    "benchmark": "node benchmark/performance-test.js",
-    "health": "node scripts/health-check.js",
-    "migrate": "node scripts/migrate-database.js",
     "backup": "node scripts/backup-database.js"
   },
   "keywords": [
@@ -37,20 +34,12 @@
     "cors": "^2.8.5",
     "helmet": "^7.1.0",
     "compression": "^1.7.4",
-    "express-rate-limit": "^7.1.5",
     "node-fetch": "^2.7.0",
     "adm-zip": "^0.5.10",
     "better-sqlite3": "^9.2.2",
     "redis": "^4.6.11",
     "winston": "^3.11.0",
-    "joi": "^17.11.0",
-    "crypto": "^1.0.1",
-    "zlib": "^1.0.5",
-    "os": "^0.1.2",
-    "events": "^3.3.0",
-    "path": "^0.12.7",
-    "fs": "^0.0.1-security",
-    "util": "^0.12.5"
+    "joi": "^17.11.0"
   },
   "devDependencies": {
     "nodemon": "^3.0.2",
@@ -60,9 +49,7 @@
     "eslint-config-standard": "^17.1.0",
     "eslint-plugin-import": "^2.29.0",
     "eslint-plugin-node": "^11.1.0",
-    "eslint-plugin-promise": "^6.1.1",
-    "@types/node": "^20.10.5",
-    "typescript": "^5.3.3"
+    "eslint-plugin-promise": "^6.1.1"
   },
   "engines": {
     "node": ">=18.0.0",
@@ -79,9 +66,11 @@
   "jest": {
     "testEnvironment": "node",
     "collectCoverageFrom": [
-      "lib/**/*.js",
       "server.js",
+      "lib/**/*.js",
+      "services/**/*.js",
       "!lib/**/*.test.js",
+      "!services/**/*.test.js",
       "!node_modules/**"
     ],
     "coverageThreshold": {

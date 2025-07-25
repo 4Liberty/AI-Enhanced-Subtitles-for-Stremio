@@ -7,65 +7,56 @@ const config = {
     PORT: process.env.PORT || 7000,
 
     // The public URL of your addon.
-    // Replace this with your actual VPS URL when you deploy.
-    SERVER_URL: "http://your-vps-ip-or-domain:7000",
-
-    // Your API key from OpenSubtitles.com (REQUIRED)
-    // Register for a free account at https://www.opensubtitles.com
-    // Set OPENSUBTITLES_API_KEY as an environment variable for production use.
-    OPENSUBTITLES_API_KEY: process.env.OPENSUBTITLES_API_KEY,
-
-    // TMDb API key (for TMDb-to-IMDb conversion)
-    // Register at https://www.themoviedb.org/settings/api and set TMDB_API_KEY as an environment variable.
-    TMDB_API_KEY: process.env.TMDB_API_KEY,
-
-    // Podnapisi unofficial JSON API endpoint (no API key required)
-    // See: https://www.podnapisi.net/subtitles/search/advanced?keywords=YourMovie&year=2025
-    PODNAPISI_API_URL: process.env.PODNAPISI_API_URL || "https://www.podnapisi.net/subtitles/search/advanced",
-    PODNAPISI_USER_AGENT: process.env.PODNAPISI_USER_AGENT || "Your-Application-Name/1.0",
+    SERVER_URL: process.env.SERVER_URL || "http://127.0.0.1:7000",
 
     // Time in milliseconds for how long to cache subtitle match results.
-    // 2 * 60 * 60 * 1000 = 2 hours (reduced from 24 hours for better freshness)
-    CACHE_DURATION_MS: 2 * 60 * 60 * 1000,
+    CACHE_DURATION_MS: 2 * 60 * 60 * 1000, // 2 hours
 
-    // Provider configuration for UI monitoring
-    opensubtitles: {
-        enabled: !!process.env.OPENSUBTITLES_API_KEY,
-        name: "OpenSubtitles",
-        apiKey: process.env.OPENSUBTITLES_API_KEY
-    },
-    
-    subdl: {
-        enabled: !!process.env.SUBDL_API_KEY,
-        name: "SubDL",
-        apiKey: process.env.SUBDL_API_KEY
-    },
-    
-    podnapisi: {
-        enabled: true, // No API key required
-        name: "Podnapisi",
-        apiKey: null
-    },
-    
-    realdebrid: {
-        enabled: !!process.env.REAL_DEBRID_API_KEY,
-        name: "Real-Debrid",
-        apiKey: process.env.REAL_DEBRID_API_KEY
-    },
-    
-    gemini: {
-        enabled: !!process.env.GEMINI_API_KEY,
-        name: "Gemini AI",
-        apiKey: process.env.GEMINI_API_KEY
+    // Redis configuration
+    redis: {
+        host: process.env.REDIS_HOST || '127.0.0.1',
+        port: process.env.REDIS_PORT || 6379,
+        password: process.env.REDIS_PASSWORD || null,
     },
 
-    // Subdl API key (for https://api.subdl.com/api/v1/subtitles)
-    SUBDL_API_KEY: process.env.SUBDL_API_KEY || null, // If not set, fallback to HTML scrape
+    // SQLite database configuration
+    database: {
+        path: process.env.DB_PATH || './data/database.sqlite',
+    },
 
-    // OpenSubtitles usage tracker
-    opensubtitlesUsage: {
-        count: 0,
-        lastReset: Date.now()
+    // Provider configurations
+    providers: {
+        opensubtitles: {
+            enabled: !!process.env.OPENSUBTITLES_API_KEY,
+            name: "OpenSubtitles",
+            apiKey: process.env.OPENSUBTITLES_API_KEY
+        },
+        subdl: {
+            enabled: !!process.env.SUBDL_API_KEY,
+            name: "SubDL",
+            apiKey: process.env.SUBDL_API_KEY
+        },
+        podnapisi: {
+            enabled: process.env.PODNAPISI_ENABLED === 'true',
+            name: "Podnapisi",
+            apiUrl: process.env.PODNAPISI_API_URL || "https://www.podnapisi.net/subtitles/search/advanced",
+            userAgent: process.env.PODNAPISI_USER_AGENT || "Stremio-AI-Addon/2.0"
+        },
+        realdebrid: {
+            enabled: !!process.env.REAL_DEBRID_API_KEY,
+            name: "Real-Debrid",
+            apiKey: process.env.REAL_DEBRID_API_KEY
+        },
+        gemini: {
+            enabled: !!process.env.GEMINI_API_KEY,
+            name: "Gemini AI",
+            apiKey: process.env.GEMINI_API_KEY
+        },
+        tmdb: {
+            enabled: !!process.env.TMDB_API_KEY,
+            name: "TMDb",
+            apiKey: process.env.TMDB_API_KEY
+        }
     }
 };
 
