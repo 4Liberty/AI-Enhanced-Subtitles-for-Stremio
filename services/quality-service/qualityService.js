@@ -1,7 +1,9 @@
 // services/quality-service/qualityService.js
 // Microservice for analyzing subtitle quality
 
+const express = require('express');
 const EventBus = require('../../lib/events/eventBus');
+const config = require('../../config');
 
 class QualityService {
     constructor(options = {}) {
@@ -12,10 +14,12 @@ class QualityService {
             host: options.host || process.env.QUALITY_SERVICE_HOST || '0.0.0.0',
             
             // Event bus configuration
-            redisUrl: options.redisUrl || process.env.REDIS_URL || 'redis://localhost:6379'
+            redis: config.redis
         };
         
+        this.app = express();
         this.eventBus = null;
+        this.server = null;
         
         console.log(`[${this.config.serviceName}] Initializing quality service...`);
         this.initialize();
@@ -26,10 +30,12 @@ class QualityService {
             this.eventBus = new EventBus({
                 serviceName: this.config.serviceName,
                 serviceId: this.config.serviceId,
-                redisUrl: this.config.redisUrl
+                redis: this.config.redis
             });
             
+            this.app.use(express.json());
             this.setupEventHandlers();
+            this.setupRoutes();
             
             console.log(`[${this.config.serviceName}] Initialization completed`);
             
@@ -76,6 +82,22 @@ class QualityService {
             }
         });
     }
+
+    setupRoutes() {
+        this.app.get('/health', async (req, res) => {
+            const health = await this.getHealthStatus();
+            res.status(health.status === 'healthy' ? 200 : 503).json(health);
+        });
+
+        this.app.post('/analyze', (req, res) => {
+            const { subtitle } = req.body;
+            if (!subtitle) {
+                return res.status(400).json({ error: 'Subtitle content is required' });
+            }
+            const qualityScore = this.analyzeQuality(subtitle);
+            res.json({ qualityScore });
+        });
+    }
     
     analyzeQuality(subtitle) {
         let score = 0;
@@ -116,23 +138,39 @@ class QualityService {
     }
     
     async getHealthStatus() {
+        const eventBusHealth = await this.eventBus.healthCheck();
         return {
             serviceId: this.config.serviceId,
             serviceName: this.config.serviceName,
-            status: 'healthy',
+            status: eventBusHealth.healthy ? 'healthy' : 'unhealthy',
             timestamp: Date.now(),
-            uptime: this.startTime ? Date.now() - this.startTime : 0
+            uptime: this.startTime ? Date.now() - this.startTime : 0,
+            dependencies: {
+                eventBus: eventBusHealth
+            }
         };
     }
     
     async start() {
-        this.startTime = Date.now();
-        console.log(`[${this.config.serviceName}] Service started`);
+        return new Promise((resolve, reject) => {
+            this.server = this.app.listen(this.config.port, this.config.host, (err) => {
+                if (err) {
+                    return reject(err);
+                }
+                this.startTime = Date.now();
+                console.log(`[${this.config.serviceName}] Service started on ${this.config.host}:${this.config.port}`);
+                resolve();
+            });
+        });
     }
     
     async stop() {
         console.log(`[${this.config.serviceName}] Shutting down...`);
         
+        if (this.server) {
+            await new Promise(resolve => this.server.close(resolve));
+        }
+
         if (this.eventBus) {
             await this.eventBus.shutdown();
         }

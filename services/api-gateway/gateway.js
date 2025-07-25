@@ -156,7 +156,9 @@ class APIGateway {
         
         // Rate limiting
         const rateLimiter = new AdvancedRateLimiter({
-            redisUrl: this.config.redisUrl,
+            redisHost: this.config.redis.host,
+            redisPort: this.config.redis.port,
+            redisPassword: this.config.redis.password,
             points: this.config.rateLimitMax,
             duration: this.config.rateLimitWindow / 1000
         });
@@ -581,8 +583,9 @@ class APIGateway {
     }
     
     updateAverageResponseTime(responseTime) {
-        this.metrics.averageResponseTime = 
-            (this.metrics.averageResponseTime + responseTime) / 2;
+        const totalRequests = this.metrics.successfulRequests + this.metrics.failedRequests;
+        this.metrics.averageResponseTime =
+            ((this.metrics.averageResponseTime * (totalRequests - 1)) + responseTime) / totalRequests;
     }
     
     addToRequestHistory(request) {

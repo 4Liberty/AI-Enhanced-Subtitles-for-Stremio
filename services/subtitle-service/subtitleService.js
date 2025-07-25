@@ -1,8 +1,10 @@
 // services/subtitle-service/subtitleService.js
 // Microservice for fetching subtitles from various providers
 
+const express = require('express');
 const EventBus = require('../../lib/events/eventBus');
 const { getSubtitleUrlsForStremio } = require('../../lib/subtitleMatcher');
+const config = require('../../config');
 
 class SubtitleService {
     constructor(options = {}) {
@@ -13,12 +15,13 @@ class SubtitleService {
             host: options.host || process.env.SUBTITLE_SERVICE_HOST || '0.0.0.0',
             
             // Event bus configuration
-            redisUrl: options.redisUrl || process.env.REDIS_URL || 'redis://localhost:6379',
+            redis: config.redis,
             
             // Performance settings
             requestTimeout: options.requestTimeout || 30000
         };
         
+        this.app = express();
         this.eventBus = null;
         this.server = null;
         
@@ -32,14 +35,17 @@ class SubtitleService {
             this.eventBus = new EventBus({
                 serviceName: this.config.serviceName,
                 serviceId: this.config.serviceId,
-                redisUrl: this.config.redisUrl
+                redis: this.config.redis
             });
             
+            // Set up middleware
+            this.app.use(express.json());
+
             // Set up event handlers
             this.setupEventHandlers();
-            
-            // Start the service (e.g., an Express server for direct communication if needed)
-            // For now, we'll rely on the event bus for communication
+
+            // Set up HTTP routes
+            this.setupRoutes();
             
             console.log(`[${this.config.serviceName}] Initialization completed`);
             
@@ -101,6 +107,26 @@ class SubtitleService {
         });
     }
 
+    setupRoutes() {
+        this.app.get('/health', async (req, res) => {
+            const health = await this.getHealthStatus();
+            res.status(health.status === 'healthy' ? 200 : 503).json(health);
+        });
+
+        this.app.get('/subtitles/:type/:id', async (req, res) => {
+            const { type, id } = req.params;
+            const { language, infoHash } = req.query;
+            
+            try {
+                const subtitles = await getSubtitleUrlsForStremio(id, type, null, null, language, infoHash);
+                const scoredSubtitles = await this.scoreSubtitles(subtitles, `http_${Date.now()}`);
+                res.json({ subtitles: scoredSubtitles });
+            } catch (error) {
+                res.status(500).json({ error: error.message });
+            }
+        });
+    }
+
     async scoreSubtitles(subtitles, correlationId) {
         const scoredSubtitles = await Promise.all(
             subtitles.map(async (subtitle) => {
@@ -124,25 +150,39 @@ class SubtitleService {
     }
     
     async getHealthStatus() {
+        const eventBusHealth = await this.eventBus.healthCheck();
         return {
             serviceId: this.config.serviceId,
             serviceName: this.config.serviceName,
-            status: 'healthy',
+            status: eventBusHealth.healthy ? 'healthy' : 'unhealthy',
             timestamp: Date.now(),
-            uptime: this.startTime ? Date.now() - this.startTime : 0
+            uptime: this.startTime ? Date.now() - this.startTime : 0,
+            dependencies: {
+                eventBus: eventBusHealth
+            }
         };
     }
     
     async start() {
-        this.startTime = Date.now();
-        console.log(`[${this.config.serviceName}] Service started`);
-        // In a real scenario, you might start an Express server here
-        // for direct API access or other purposes.
+        return new Promise((resolve, reject) => {
+            this.server = this.app.listen(this.config.port, this.config.host, (err) => {
+                if (err) {
+                    return reject(err);
+                }
+                this.startTime = Date.now();
+                console.log(`[${this.config.serviceName}] Service started on ${this.config.host}:${this.config.port}`);
+                resolve();
+            });
+        });
     }
     
     async stop() {
         console.log(`[${this.config.serviceName}] Shutting down...`);
         
+        if (this.server) {
+            await new Promise(resolve => this.server.close(resolve));
+        }
+
         if (this.eventBus) {
             await this.eventBus.shutdown();
         }

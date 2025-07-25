@@ -15,13 +15,13 @@ class LoadBalancer {
         console.log(`[LoadBalancer] Initialized with strategy: ${this.config.strategy}`);
     }
     
-    selectInstance(instances) {
+    selectInstance(instances, ip = null) {
         if (!instances || instances.length === 0) {
             return null;
         }
         
         // Filter for healthy instances
-        const healthyInstances = instances.filter(instance => 
+        const healthyInstances = instances.filter(instance =>
             instance.status === 'healthy'
         );
         
@@ -37,8 +37,7 @@ class LoadBalancer {
             case 'random':
                 return this.random(healthyInstances);
             case 'ip-hash':
-                // Requires request IP, so needs to be handled in the router
-                return this.random(healthyInstances); // Fallback
+                return this.ipHash(healthyInstances, ip);
             default:
                 return this.roundRobin(healthyInstances);
         }

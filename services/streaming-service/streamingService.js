@@ -1,9 +1,11 @@
 // services/streaming-service/streamingService.js
 // Microservice for handling Real-Debrid and other streaming providers
 
+const express = require('express');
 const EventBus = require('../../lib/events/eventBus');
 const { searchRealDebrid } = require('../../lib/realDebridSearch');
 const { enrichStreams } = require('../../lib/streamEnricher');
+const config = require('../../config');
 
 class StreamingService {
     constructor(options = {}) {
@@ -14,9 +16,10 @@ class StreamingService {
             host: options.host || process.env.STREAMING_SERVICE_HOST || '0.0.0.0',
             
             // Event bus configuration
-            redisUrl: options.redisUrl || process.env.REDIS_URL || 'redis://localhost:6379'
+            redis: config.redis
         };
         
+        this.app = express();
         this.eventBus = null;
         this.server = null;
         
@@ -30,11 +33,17 @@ class StreamingService {
             this.eventBus = new EventBus({
                 serviceName: this.config.serviceName,
                 serviceId: this.config.serviceId,
-                redisUrl: this.config.redisUrl
+                redis: this.config.redis
             });
             
+            // Set up middleware
+            this.app.use(express.json());
+
             // Set up event handlers
             this.setupEventHandlers();
+
+            // Set up HTTP routes
+            this.setupRoutes();
             
             console.log(`[${this.config.serviceName}] Initialization completed`);
             
@@ -114,25 +123,68 @@ class StreamingService {
             }
         });
     }
+
+    setupRoutes() {
+        this.app.get('/health', async (req, res) => {
+            const health = await this.getHealthStatus();
+            res.status(health.status === 'healthy' ? 200 : 503).json(health);
+        });
+
+        this.app.post('/realdebrid/search', async (req, res) => {
+            const { imdbId, type, season, episode } = req.body;
+            try {
+                const streams = await searchRealDebrid({ imdb_id: imdbId, type, season, episode });
+                res.json({ streams });
+            } catch (error) {
+                res.status(500).json({ error: error.message });
+            }
+        });
+
+        this.app.post('/enrich', async (req, res) => {
+            const { streams } = req.body;
+            try {
+                const enrichedStreams = await enrichStreams(streams);
+                res.json({ enrichedStreams });
+            } catch (error) {
+                res.status(500).json({ error: error.message });
+            }
+        });
+    }
     
     async getHealthStatus() {
+        const eventBusHealth = await this.eventBus.healthCheck();
         return {
             serviceId: this.config.serviceId,
             serviceName: this.config.serviceName,
-            status: 'healthy',
+            status: eventBusHealth.healthy ? 'healthy' : 'unhealthy',
             timestamp: Date.now(),
-            uptime: this.startTime ? Date.now() - this.startTime : 0
+            uptime: this.startTime ? Date.now() - this.startTime : 0,
+            dependencies: {
+                eventBus: eventBusHealth
+            }
         };
     }
     
     async start() {
-        this.startTime = Date.now();
-        console.log(`[${this.config.serviceName}] Service started`);
+        return new Promise((resolve, reject) => {
+            this.server = this.app.listen(this.config.port, this.config.host, (err) => {
+                if (err) {
+                    return reject(err);
+                }
+                this.startTime = Date.now();
+                console.log(`[${this.config.serviceName}] Service started on ${this.config.host}:${this.config.port}`);
+                resolve();
+            });
+        });
     }
     
     async stop() {
         console.log(`[${this.config.serviceName}] Shutting down...`);
         
+        if (this.server) {
+            await new Promise(resolve => this.server.close(resolve));
+        }
+
         if (this.eventBus) {
             await this.eventBus.shutdown();
         }

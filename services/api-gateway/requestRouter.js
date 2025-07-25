@@ -30,10 +30,13 @@ class RequestRouter {
             }
             
             // Select an instance using the load balancer
-            const instance = this.config.loadBalancer.selectInstance(instances);
+            const instance = this.config.loadBalancer.selectInstance(instances, request.ip);
             if (!instance) {
                 throw new Error(`Load balancer failed to select an instance for service: ${serviceName}`);
             }
+            
+            // Track connection for least-connections strategy
+            this.config.loadBalancer.incrementConnection(instance.id);
             
             // Construct the target URL
             const targetUrl = this.constructTargetUrl(instance, request);
@@ -45,6 +48,9 @@ class RequestRouter {
             
             // Record successful request for service discovery
             this.config.serviceDiscovery.recordRequest(serviceName, true, responseTime);
+            
+            // Untrack connection
+            this.config.loadBalancer.decrementConnection(instance.id);
             
             return {
                 success: true,
@@ -58,6 +64,11 @@ class RequestRouter {
             
             // Record failed request for service discovery
             this.config.serviceDiscovery.recordRequest(serviceName, false, responseTime);
+            
+            // Untrack connection on failure
+            if (instance) {
+                this.config.loadBalancer.decrementConnection(instance.id);
+            }
             
             console.error(`[RequestRouter] Error routing to ${serviceName}:`, error);
             throw error;
@@ -90,10 +101,18 @@ class RequestRouter {
                 signal: controller.signal
             });
             
-            const data = await response.json();
+            let data;
+            const contentType = response.headers.get('content-type');
+            
+            if (contentType && contentType.includes('application/json')) {
+                data = await response.json();
+            } else {
+                data = await response.text();
+            }
             
             if (!response.ok) {
-                const error = new Error(data.error || `Request failed with status ${response.status}`);
+                const errorMessage = typeof data === 'object' && data.error ? data.error : `Request failed with status ${response.status}`;
+                const error = new Error(errorMessage);
                 error.statusCode = response.status;
                 throw error;
             }

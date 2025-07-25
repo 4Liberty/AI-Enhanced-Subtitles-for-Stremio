@@ -1,8 +1,10 @@
 // services/ai-service/aiService.js
 // Microservice for AI-powered subtitle enhancement
 
+const express = require('express');
 const EventBus = require('../../lib/events/eventBus');
 const AIWorkerPool = require('../../lib/workers/aiWorkerPool');
+const config = require('../../config');
 
 class AIService {
     constructor(options = {}) {
@@ -13,12 +15,13 @@ class AIService {
             host: options.host || process.env.AI_SERVICE_HOST || '0.0.0.0',
             
             // Event bus configuration
-            redisUrl: options.redisUrl || process.env.REDIS_URL || 'redis://localhost:6379',
+            redis: config.redis,
             
             // Worker pool settings
             maxWorkers: options.maxWorkers || Math.min(4, require('os').cpus().length)
         };
         
+        this.app = express();
         this.eventBus = null;
         this.aiWorkerPool = null;
         this.server = null;
@@ -33,7 +36,7 @@ class AIService {
             this.eventBus = new EventBus({
                 serviceName: this.config.serviceName,
                 serviceId: this.config.serviceId,
-                redisUrl: this.config.redisUrl
+                redis: this.config.redis
             });
             
             // Initialize AI worker pool
@@ -41,8 +44,14 @@ class AIService {
                 maxWorkers: this.config.maxWorkers
             });
             
+            // Set up middleware
+            this.app.use(express.json());
+
             // Set up event handlers
             this.setupEventHandlers();
+
+            // Set up HTTP routes
+            this.setupRoutes();
             
             console.log(`[${this.config.serviceName}] Initialization completed`);
             
@@ -125,25 +134,67 @@ class AIService {
             }
         });
     }
+
+    setupRoutes() {
+        this.app.get('/health', async (req, res) => {
+            const health = await this.getHealthStatus();
+            res.status(health.status === 'healthy' ? 200 : 503).json(health);
+        });
+
+        this.app.post('/enhance', async (req, res) => {
+            const { content, options } = req.body;
+            try {
+                const enhancedContent = await this.aiWorkerPool.processSubtitle(content, options);
+                res.json({ enhancedContent });
+            } catch (error) {
+                res.status(500).json({ error: error.message });
+            }
+        });
+
+        this.app.post('/translate', async (req, res) => {
+            const { content, sourceLang, targetLang, options } = req.body;
+            try {
+                const translatedContent = await this.aiWorkerPool.processSubtitle(content, {
+                    ...options,
+                    task: 'translate',
+                    sourceLang,
+                    targetLang
+                });
+                res.json({ translatedContent });
+            } catch (error) {
+                res.status(500).json({ error: error.message });
+            }
+        });
+    }
     
     async getHealthStatus() {
         const workerHealth = this.aiWorkerPool ? await this.aiWorkerPool.healthCheck() : { healthy: false };
+        const eventBusHealth = await this.eventBus.healthCheck();
         
         return {
             serviceId: this.config.serviceId,
             serviceName: this.config.serviceName,
-            status: workerHealth.healthy ? 'healthy' : 'unhealthy',
+            status: workerHealth.healthy && eventBusHealth.healthy ? 'healthy' : 'unhealthy',
             timestamp: Date.now(),
             uptime: this.startTime ? Date.now() - this.startTime : 0,
-            components: {
-                workerPool: workerHealth
+            dependencies: {
+                workerPool: workerHealth,
+                eventBus: eventBusHealth
             }
         };
     }
     
     async start() {
-        this.startTime = Date.now();
-        console.log(`[${this.config.serviceName}] Service started`);
+        return new Promise((resolve, reject) => {
+            this.server = this.app.listen(this.config.port, this.config.host, (err) => {
+                if (err) {
+                    return reject(err);
+                }
+                this.startTime = Date.now();
+                console.log(`[${this.config.serviceName}] Service started on ${this.config.host}:${this.config.port}`);
+                resolve();
+            });
+        });
     }
     
     async stop() {
@@ -153,6 +204,10 @@ class AIService {
             await this.aiWorkerPool.shutdown();
         }
         
+        if (this.server) {
+            await new Promise(resolve => this.server.close(resolve));
+        }
+
         if (this.eventBus) {
             await this.eventBus.shutdown();
         }

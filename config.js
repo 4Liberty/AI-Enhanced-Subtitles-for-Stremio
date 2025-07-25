@@ -1,7 +1,6 @@
 // config.js
 // Holds all configuration for the addon.
 
-
 const config = {
     // The port the addon server will run on.
     PORT: process.env.PORT || 7000,
