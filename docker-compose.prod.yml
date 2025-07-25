@@ -1,0 +1,88 @@
+version: '3.8'
+
+services:
+  redis:
+    image: redis:7-alpine
+    container_name: redis-prod
+    volumes:
+      - redis_data_prod:/data
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  api-gateway:
+    build:
+      context: .
+      dockerfile: Dockerfile.prod
+    container_name: api-gateway-prod
+    ports:
+      - "7000:7000"
+    environment:
+      - NODE_ENV=production
+      - REDIS_URL=redis://redis-prod:6379
+      - GATEWAY_PORT=7000
+    depends_on:
+      - redis
+    restart: unless-stopped
+
+  subtitle-service:
+    build:
+      context: .
+      dockerfile: Dockerfile.prod
+    container_name: subtitle-service-prod
+    environment:
+      - NODE_ENV=production
+      - REDIS_URL=redis://redis-prod:6379
+      - OPENSUBTITLES_API_KEY=${OPENSUBTITLES_API_KEY}
+      - SUBDL_API_KEY=${SUBDL_API_KEY}
+      - TMDB_API_KEY=${TMDB_API_KEY}
+      - OMDB_API_KEY=${OMDB_API_KEY}
+    depends_on:
+      - redis
+    restart: unless-stopped
+
+  ai-service:
+    build:
+      context: .
+      dockerfile: Dockerfile.prod
+    container_name: ai-service-prod
+    environment:
+      - NODE_ENV=production
+      - REDIS_URL=redis://redis-prod:6379
+      - MAX_WORKERS=4
+      - GEMINI_API_KEY=${GEMINI_API_KEY}
+      - OPENAI_API_KEY=${OPENAI_API_KEY}
+      - CLAUDE_API_KEY=${CLAUDE_API_KEY}
+    depends_on:
+      - redis
+    restart: unless-stopped
+
+  streaming-service:
+    build:
+      context: .
+      dockerfile: Dockerfile.prod
+    container_name: streaming-service-prod
+    environment:
+      - NODE_ENV=production
+      - REDIS_URL=redis://redis-prod:6379
+      - REALDEBRID_API_KEY=${REALDEBRID_API_KEY}
+    depends_on:
+      - redis
+    restart: unless-stopped
+
+  quality-service:
+    build:
+      context: .
+      dockerfile: Dockerfile.prod
+    container_name: quality-service-prod
+    environment:
+      - NODE_ENV=production
+      - REDIS_URL=redis://redis-prod:6379
+    depends_on:
+      - redis
+    restart: unless-stopped
+
+volumes:
+  redis_data_prod:

@@ -1,0 +1,89 @@
+version: '3.8'
+
+services:
+  redis:
+    image: redis:7-alpine
+    container_name: redis
+    ports:
+      - "6379:6379"
+    volumes:
+      - redis_data:/data
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  api-gateway:
+    build:
+      context: .
+      dockerfile: services/api-gateway/Dockerfile
+    container_name: api-gateway
+    ports:
+      - "7000:7000"
+    environment:
+      - REDIS_URL=redis://redis:6379
+      - GATEWAY_PORT=7000
+    depends_on:
+      - redis
+    restart: unless-stopped
+
+  subtitle-service:
+    build:
+      context: .
+      dockerfile: services/subtitle-service/Dockerfile
+    container_name: subtitle-service
+    environment:
+      - REDIS_URL=redis://redis:6379
+      - SUBTITLE_SERVICE_PORT=7001
+      - OPENSUBTITLES_API_KEY=${OPENSUBTITLES_API_KEY}
+      - SUBDL_API_KEY=${SUBDL_API_KEY}
+      - TMDB_API_KEY=${TMDB_API_KEY}
+      - OMDB_API_KEY=${OMDB_API_KEY}
+    depends_on:
+      - redis
+    restart: unless-stopped
+
+  ai-service:
+    build:
+      context: .
+      dockerfile: services/ai-service/Dockerfile
+    container_name: ai-service
+    environment:
+      - REDIS_URL=redis://redis:6379
+      - AI_SERVICE_PORT=7002
+      - MAX_WORKERS=2
+      - GEMINI_API_KEY=${GEMINI_API_KEY}
+      - OPENAI_API_KEY=${OPENAI_API_KEY}
+      - CLAUDE_API_KEY=${CLAUDE_API_KEY}
+    depends_on:
+      - redis
+    restart: unless-stopped
+
+  streaming-service:
+    build:
+      context: .
+      dockerfile: services/streaming-service/Dockerfile
+    container_name: streaming-service
+    environment:
+      - REDIS_URL=redis://redis:6379
+      - STREAMING_SERVICE_PORT=7003
+      - REALDEBRID_API_KEY=${REALDEBRID_API_KEY}
+    depends_on:
+      - redis
+    restart: unless-stopped
+
+  quality-service:
+    build:
+      context: .
+      dockerfile: services/quality-service/Dockerfile
+    container_name: quality-service
+    environment:
+      - REDIS_URL=redis://redis:6379
+      - QUALITY_SERVICE_PORT=7004
+    depends_on:
+      - redis
+    restart: unless-stopped
+
+volumes:
+  redis_data:

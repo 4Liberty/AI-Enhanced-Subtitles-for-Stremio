@@ -1,0 +1,21 @@
+{
+  "name": "VLSub AI Subtitle Addon",
+  "short_name": "VLSub AI",
+  "start_url": "index.html",
+  "display": "standalone",
+  "background_color": "#1a1a1a",
+  "theme_color": "#2d2d2d",
+  "description": "AI-powered Turkish subtitles with performance optimizations for Stremio.",
+  "icons": [
+    {
+      "src": "icons/icon-192x192.png",
+      "sizes": "192x192",
+      "type": "image/png"
+    },
+    {
+      "src": "icons/icon-512x512.png",
+      "sizes": "512x512",
+      "type": "image/png"
+    }
+  ]
+}

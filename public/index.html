@@ -1,0 +1,35 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>VLSub AI Subtitle Addon</title>
+    <link rel="stylesheet" href="styles.css">
+    <link rel="manifest" href="manifest.json">
+    <meta name="theme-color" content="#2d2d2d"/>
+</head>
+<body>
+    <div class="container">
+        <h1>VLSub AI Subtitle Addon</h1>
+        <p>Your gateway to AI-enhanced subtitles for Stremio.</p>
+        
+        <div id="status">
+            <h2>Service Status</h2>
+            <p id="gateway-status">API Gateway: <span class="unknown">Unknown</span></p>
+            <p id="subtitle-status">Subtitle Service: <span class="unknown">Unknown</span></p>
+            <p id="ai-status">AI Service: <span class="unknown">Unknown</span></p>
+            <p id="streaming-status">Streaming Service: <span class="unknown">Unknown</span></p>
+            <p id="quality-status">Quality Service: <span class="unknown">Unknown</span></p>
+        </div>
+        
+        <div id="metrics">
+            <h2>Real-time Metrics</h2>
+            <p>Total Requests: <span id="total-requests">0</span></p>
+            <p>Average Response Time: <span id="avg-response-time">0ms</span></p>
+            <p>Cache Hit Rate: <span id="cache-hit-rate">0%</span></p>
+        </div>
+    </div>
+    
+    <script src="app.js"></script>
+</body>
+</html>
