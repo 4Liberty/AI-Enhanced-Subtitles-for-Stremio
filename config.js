@@ -25,8 +25,8 @@ const config = {
     PODNAPISI_USER_AGENT: process.env.PODNAPISI_USER_AGENT || "Your-Application-Name/1.0",
 
     // Time in milliseconds for how long to cache subtitle match results.
-    // 24 * 60 * 60 * 1000 = 24 hours.
-    CACHE_DURATION_MS: 24 * 60 * 60 * 1000,
+    // 2 * 60 * 60 * 1000 = 2 hours (reduced from 24 hours for better freshness)
+    CACHE_DURATION_MS: 2 * 60 * 60 * 1000,
 
     // Provider configuration for UI monitoring
     opensubtitles: {
